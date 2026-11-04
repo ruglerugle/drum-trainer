@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ドラムトレーナー</title>
+<meta name="description" content="電子ドラムをMIDIでつないで、ドラム譜を読んでリズムどおりに叩く練習。タイミングのずれをミリ秒で判定します。">
+<link rel="canonical" href="https://drum-trainer.habatakijuku.com/">
+<meta property="og:title" content="ドラムトレーナー">
+<meta property="og:description" content="電子ドラムをMIDIでつないで、ドラム譜を読んでリズムどおりに叩く練習。タイミングのずれをミリ秒で判定します。">
+<meta property="og:url" content="https://drum-trainer.habatakijuku.com/">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='20' rx='12' ry='6' fill='%23a4492b'/%3E%3Crect x='4' y='14' width='24' height='6' fill='%23a4492b'/%3E%3Cellipse cx='16' cy='14' rx='12' ry='5' fill='%23f6e4dc' stroke='%23a4492b' stroke-width='1.5'/%3E%3Cline x1='9' y1='3' x2='15' y2='13' stroke='%232b2620' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='25' y1='4' x2='18' y2='13' stroke='%232b2620' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+<style>
+:root {
+  --bg: #f4efe6;
+  --paper: #fffdf8;
+  --ink: #2b2620;
+  --muted: #7a6f62;
+  --line: #e2d9ca;
+  --accent: #a4492b;
+  --accent-soft: #f6e4dc;
+  --ok: #2e8b57;
+  --ng: #c8433a;
+  --hint: #d9a21b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
+  line-height: 1.6;
+}
+header {
+  max-width: 960px; margin: 0 auto; padding: 18px 16px 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: space-between;
+}
+h1 { font-size: 1.5rem; margin: 0; letter-spacing: .05em; }
+.midi-status {
+  font-size: .85rem; padding: 4px 12px; border-radius: 999px;
+  background: #eee6d8; color: var(--muted);
+}
+.midi-status.on { background: #dcefe3; color: var(--ok); }
+.midi-status.off { background: #f6dfdc; color: var(--ng); }
+main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; display: grid; gap: 16px; }
+main > * { min-width: 0; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.stage { display: grid; gap: 10px; justify-items: center; }
+.stage > * { max-width: 100%; }
+button {
+  font: inherit; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 10px; padding: 6px 16px;
+}
+button.ghost { background: transparent; color: var(--accent); }
+button.small { padding: 2px 10px; font-size: .85rem; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--hint); outline-offset: 2px; }
+[hidden] { display: none !important; }
+body[data-mode="flash"] .only-pattern, body[data-mode="pattern"] .only-flash { display: none !important; }
+.mode-seg { width: 100%; max-width: 420px; }
+.seg { display: flex; border: 1px solid var(--accent); border-radius: 10px; overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--accent); padding: 4px 8px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.stage-bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.stage-bar button { padding: 3px 12px; font-size: .9rem; background: transparent; color: var(--accent); }
+.stage-bar button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.stage-bar.pats button { min-width: 3em; }
+.stage-bar .done::after { content: " ✓"; }
+.stage-info { font-size: .9rem; color: var(--muted); text-align: center; }
+.stage-info b { color: var(--ink); }
+.score-wrap { position: relative; width: 100%; }
+#score { width: 100%; min-height: 180px; }
+#score svg { display: block; }
+body[data-mode="flash"] #score { max-width: 280px; margin: 0 auto; min-height: 0; }
+body[data-mode="flash"] #score svg { width: 100%; height: auto; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.playhead { position: absolute; width: 2px; margin-left: -1px; background: var(--accent); opacity: .7; border-radius: 1px; }
+.extra-mark { position: absolute; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--ng); }
+.count { min-height: 1.6em; font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.count small { font-size: .9rem; color: var(--muted); font-weight: 500; }
+.feedback { min-height: 1.8em; font-size: 1.1rem; font-weight: 700; text-align: center; }
+.feedback.ok { color: var(--ok); }
+.feedback.good { color: #b07d00; }
+.feedback.ng { color: var(--ng); }
+.name-hint { min-height: 1.5em; color: var(--hint); font-weight: 700; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.bpm { display: flex; align-items: center; gap: 4px; }
+.bpm input { width: 4.2em; font: inherit; text-align: center; padding: 4px; border-radius: 8px; border: 1px solid var(--line); }
+.bpm button { padding: 4px 10px; }
+.bpm span { font-size: .85rem; color: var(--muted); }
+.result { display: grid; gap: 4px; justify-items: center; text-align: center; padding: 4px 0; }
+.result h2 { margin: 0; font-size: 1.4rem; }
+.result.clear h2 { color: var(--ok); }
+.result.fail h2 { color: var(--ng); }
+.result p { margin: 0; }
+.result .big { font-size: 1.2rem; }
+.result .sub { color: var(--muted); font-size: .9rem; }
+.legend-dots { display: flex; gap: 12px; justify-content: center; font-size: .8rem; color: var(--muted); }
+.legend-dots i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; vertical-align: -.05em; margin-right: 3px; }
+.pads { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; max-width: 640px; }
+button.pad {
+  padding: 10px 2px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink);
+  font-size: .85rem; line-height: 1.3; display: grid; gap: 2px; justify-items: center;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform .06s;
+}
+button.pad.cym { background: #fbf4dc; }
+button.pad.foot { background: #eef0f4; }
+button.pad kbd { font-family: inherit; font-size: .7rem; color: var(--muted); }
+button.pad.hit { transform: scale(.94); background: var(--accent-soft); border-color: var(--accent); }
+.kb-note { font-size: .8rem; color: var(--muted); text-align: center; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+.stat b { display: block; font-size: 1.4rem; }
+.stat span { font-size: .8rem; color: var(--muted); }
+.weak { margin-top: 10px; font-size: .9rem; color: var(--muted); text-align: center; }
+.weak strong { color: var(--ng); }
+details summary { cursor: pointer; font-weight: 700; }
+.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-top: 10px; }
+.legend-item { display: grid; justify-items: center; font-size: .8rem; text-align: center; line-height: 1.3; }
+.legend-item svg { display: block; }
+.legend-note { font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 20px; }
+.settings h2 { grid-column: 1 / -1; font-size: 1rem; margin: 0; }
+.field { display: grid; gap: 4px; font-size: .9rem; align-content: start; }
+.field > span { color: var(--muted); }
+.field small { color: var(--muted); font-size: .8rem; }
+.field.wide { grid-column: 1 / -1; }
+select, .field input[type="number"] { font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.row input[type="number"] { width: 6em; }
+.check { display: flex; gap: 6px; align-items: center; font-size: .9rem; }
+.checks { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.map-table { display: grid; gap: 6px; }
+.map-row { display: grid; grid-template-columns: 11em 1fr auto; gap: 8px; align-items: center; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.map-nums { display: flex; flex-wrap: wrap; gap: 4px; }
+button.chip { padding: 0 8px; font-size: .8rem; border-radius: 999px; background: var(--accent-soft); color: var(--ink); border-color: var(--line); }
+button.learning { background: var(--hint); border-color: var(--hint); color: #fff; }
+.monitor { font-size: .85rem; color: var(--muted); }
+footer { text-align: center; font-size: .8rem; color: var(--muted); padding: 0 16px 24px; }
+footer a { color: var(--accent); }
+@media (max-width: 560px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  h1 { font-size: 1.25rem; }
+  button.pad { font-size: .72rem; padding: 8px 1px; }
+  .map-row { grid-template-columns: 1fr auto; }
+  .map-nums { grid-column: 1 / -1; grid-row: 2; }
+}
+</style>
+</head>
+<body data-mode="pattern">
+<header>
+  <h1>ドラムトレーナー</h1>
+  <div id="midiStatus" class="midi-status">MIDIを確認中…</div>
+</header>
+
+<main>
+  <section class="card stage" aria-label="練習">
+    <div class="seg mode-seg" id="modeSeg" role="group" aria-label="モード">
+      <button type="button" data-v="pattern">パターン読譜</button>
+      <button type="button" data-v="flash">楽器フラッシュ</button>
+    </div>
+    <div id="stageBar" class="stage-bar only-pattern" role="group" aria-label="ステージ"></div>
+    <div id="patBar" class="stage-bar pats only-pattern" role="group" aria-label="パターン"></div>
+    <div id="stageInfo" class="stage-info" aria-live="polite"></div>
+    <div class="score-wrap">
+      <div id="score" role="img" aria-label="ドラム譜"></div>
+      <div class="overlay only-pattern"><div id="playhead" class="playhead" hidden></div><div id="marks"></div></div>
+    </div>
+    <div class="legend-dots only-pattern" aria-hidden="true">
+      <span><i style="background:var(--ok)"></i>Perfect</span>
+      <span><i style="background:var(--hint)"></i>Good</span>
+      <span><i style="background:var(--ng)"></i>Miss・余分</span>
+    </div>
+    <div id="count" class="count only-pattern" aria-live="off"></div>
+    <div id="nameHint" class="name-hint only-flash"></div>
+    <div id="feedback" class="feedback" aria-live="polite"></div>
+    <div id="result" class="result only-pattern" aria-live="polite" hidden></div>
+    <div class="controls only-pattern">
+      <button id="startBtn" type="button">▶ スタート（Enter）</button>
+      <button id="stopBtn" type="button" hidden>■ ストップ（Esc）</button>
+      <button id="demoBtn" class="ghost" type="button">♪ お手本を聞く</button>
+      <div class="bpm">
+        <button id="bpmDown" class="ghost" type="button" aria-label="テンポを下げる">−</button>
+        <input id="bpmInput" type="number" min="40" max="200" step="1" aria-label="テンポ（BPM）">
+        <button id="bpmUp" class="ghost" type="button" aria-label="テンポを上げる">＋</button>
+        <span>BPM</span>
+      </div>
+    </div>
+    <div class="controls only-pattern">
+      <button id="prevBtn" class="ghost small" type="button">← 前のパターン</button>
+      <button id="weakBtn" class="ghost small" type="button">苦手なパターンを練習</button>
+      <button id="nextBtn" class="ghost small" type="button">次のパターン →</button>
+    </div>
+    <div class="controls only-flash">
+      <button id="skipBtn" class="ghost" type="button">答えを見て次へ</button>
+    </div>
+    <div id="pads" class="pads" aria-label="画面のパッド"></div>
+    <div class="kb-note">MIDIがないときは、画面のパッドを押すか、PCのキーで叩けます（パッドに書いてあるキー。キックは Space か F）。</div>
+  </section>
+
+  <section class="card" aria-label="成績">
+    <div id="stats" class="stats"></div>
+    <div id="weak" class="weak"></div>
+  </section>
+
+  <section class="card">
+    <details id="legendBox">
+      <summary>ドラム譜の見方</summary>
+      <p class="legend-note">線と線のあいだ（間）や線の上の位置で、どの楽器かを表します。シンバル類は × の形の音符、太鼓は黒い丸。手で叩くものは棒（符尾）が上、足で踏むもの（キック・ペダル）は下向きに書きます。</p>
+      <div id="legend" class="legend"></div>
+    </details>
+  </section>
+
+  <section class="card settings" aria-label="設定">
+    <h2>設定</h2>
+    <label class="field only-pattern">
+      <span>続けて叩く小節の数</span>
+      <select id="passesSel">
+        <option value="1">1小節</option>
+        <option value="2">2小節（同じパターンを2回）</option>
+        <option value="4">4小節</option>
+        <option value="inf">止めるまで続ける</option>
+      </select>
+    </label>
+    <label class="field only-pattern">
+      <span>メトロノーム</span>
+      <select id="metroSel">
+        <option value="4">4分音符ごと</option>
+        <option value="8">8分音符ごと</option>
+        <option value="off">はじめのカウントだけ</option>
+      </select>
+    </label>
+    <div class="field only-pattern">
+      <span>判定の厳しさ（Perfect / Good の幅）</span>
+      <div class="seg" id="judgeSeg">
+        <button type="button" data-v="easy">やさしい</button>
+        <button type="button" data-v="normal">ふつう</button>
+        <button type="button" data-v="hard">きびしい</button>
+      </div>
+      <small id="judgeNote"></small>
+    </div>
+    <div class="field">
+      <span>タイミングの補正（ms）</span>
+      <div class="row">
+        <input id="latencyInput" type="number" min="-200" max="200" step="1">
+        <button id="calibBtn" class="ghost small" type="button">叩いて測る</button>
+      </div>
+      <small>電子ドラムやスピーカーの遅れを差し引きます。「叩いて測る」でクリック音に合わせて16回叩くと自動で決まります。</small>
+    </div>
+    <div class="field">
+      <span>ハイハット</span>
+      <label class="check"><input type="checkbox" id="strictHHChk">オープンとクローズを区別する</label>
+      <small>オフのときは、どちらで叩いても正解にします。</small>
+    </div>
+    <div class="field">
+      <span>音</span>
+      <label class="check"><input type="checkbox" id="midiSoundChk">MIDIで叩いた音もこのページで鳴らす</label>
+      <label class="row">メトロノーム <input id="metroVol" type="range" min="0" max="1" step="0.05"></label>
+      <label class="row">ドラム <input id="drumVol" type="range" min="0" max="1" step="0.05"></label>
+    </div>
+    <div class="field only-flash">
+      <span>出題する楽器</span>
+      <div id="flashChecks" class="checks"></div>
+      <label class="check"><input type="checkbox" id="hintChk">はじめから楽器名を見せる</label>
+    </div>
+    <div class="field wide">
+      <span>MIDIの番号の割り当て</span>
+      <small>電子ドラムのパッドが送る番号と楽器の対応です。違う楽器として判定されるときは「叩いて追加」を押してから、そのパッドを叩いてください。</small>
+      <div id="mapTable" class="map-table"></div>
+      <div class="row">
+        <button id="mapResetBtn" class="ghost small" type="button">標準（GM配列）に戻す</button>
+        <span id="midiMonitor" class="monitor"></span>
+      </div>
+    </div>
+    <div class="field">
+      <span>記録</span>
+      <button id="resetBtn" class="ghost" type="button">成績の記録を消す</button>
+    </div>
+  </section>
+</main>
+
+<footer>MIDI入力は Chrome / Edge で使えます（Safari は非対応）。ピアノの読譜練習は <a href="https://piano-trainer.habatakijuku.com/">読譜トレーナー</a> へ。</footer>
+
+<script>
+'use strict';
+const VF = Vex.Flow;
+const $ = (id) => document.getElementById(id);
+
+// ---- 楽器 ----
+// key: 打楽器譜での位置。voice: up = 手（符尾が上）/ down = 足（符尾が下）
+const INSTS = [
+  { id: 'cr', name: 'クラッシュ', pad: 'クラッシュ', key: 'a/5/x2', voice: 'up', kind: 'cym', code: 'KeyY', label: 'Y', midi: [49, 57, 55, 52] },
+  { id: 'ho', name: 'ハイハット（オープン）', pad: 'HH オープン', key: 'g/5/x2', open: true, voice: 'up', kind: 'cym', code: 'KeyI', label: 'I', midi: [46, 26] },
+  { id: 'hh', name: 'ハイハット（クローズ）', pad: 'HH クローズ', key: 'g/5/x2', voice: 'up', kind: 'cym', code: 'KeyK', label: 'K', midi: [42, 22] },
+  { id: 'rd', name: 'ライド', pad: 'ライド', key: 'f/5/x2', voice: 'up', kind: 'cym', code: 'KeyP', label: 'P', midi: [51, 59, 53] },
+  { id: 't1', name: 'タム1（ハイタム）', pad: 'タム1', key: 'e/5', voice: 'up', kind: 'drum', code: 'KeyU', label: 'U', midi: [48, 50] },
+  { id: 't2', name: 'タム2（ロータム）', pad: 'タム2', key: 'd/5', voice: 'up', kind: 'drum', code: 'KeyO', label: 'O', midi: [45, 47] },
+  { id: 'sd', name: 'スネア', pad: 'スネア', key: 'c/5', voice: 'up', kind: 'drum', code: 'KeyJ', label: 'J', midi: [38, 40, 37] },
+  { id: 'ft', name: 'フロアタム', pad: 'フロアタム', key: 'a/4', voice: 'up', kind: 'drum', code: 'KeyL', label: 'L', midi: [43, 41, 58] },
+  { id: 'bd', name: 'キック（バスドラム）', pad: 'キック', key: 'f/4', voice: 'down', kind: 'foot', code: 'Space', label: 'Space', midi: [36, 35] },
+  { id: 'hp', name: 'ハイハット（ペダル）', pad: 'HH ペダル', key: 'd/4/x2', voice: 'down', kind: 'foot', code: 'KeyN', label: 'N', midi: [44] },
+];
+const INST = Object.fromEntries(INSTS.map((i) => [i.id, i]));
+const PAD_ORDER = ['cr', 'ho', 't1', 't2', 'rd', 'hh', 'sd', 'bd', 'ft', 'hp'];
+const CODE_TO_INST = { ...Object.fromEntries(INSTS.map((i) => [i.code, i.id])), KeyF: 'bd' };
+const keyStep = (key) => { const [l, o] = key.split('/'); return Number(o) * 7 + 'cdefgab'.indexOf(l); };
+const defaultMidiMap = () => Object.fromEntries(INSTS.map((i) => [i.id, [...i.midi]]));
+
+// ---- パターン（1小節 = 16分音符16個、x = 叩く）----
+const HH8 = 'x.x.x.x.x.x.x.x.';
+const SD24 = '....x.......x...';
+const HH16 = 'xxxx.xxxxxxx.xxx';
+const STAGES = [
+  { short: '4分', title: '4分音符のビート', desc: '1拍に1つずつ。拍に合わせて叩くことに慣れましょう。', patterns: [
+    { name: 'キックだけ', bd: 'x...x...x...x...' },
+    { name: 'キックとスネア', sd: SD24, bd: 'x.......x.......' },
+    { name: 'ハイハットを足す', hh: 'x...x...x...x...', sd: SD24, bd: 'x.......x.......' },
+    { name: 'キックを3つ', hh: 'x...x...x...x...', sd: SD24, bd: 'x...x...x.......' },
+    { name: '休符のある小節', hh: 'x...x...x.......', sd: '....x...........', bd: 'x.......x.......' },
+    { name: 'クラッシュとライド', cr: 'x...............', rd: '....x...x...x...', sd: SD24, bd: 'x.......x.......' },
+  ] },
+  { short: '8ビート', title: '8ビート', desc: 'ハイハットを8分音符で刻む、いちばん基本のリズム。キックの位置が少しずつ変わります。', patterns: [
+    { name: '基本の8ビート', hh: HH8, sd: SD24, bd: 'x.......x.......' },
+    { name: '3拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.......x.x.....' },
+    { name: '1拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.x.....x.......' },
+    { name: '2拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.....x.x.......' },
+    { name: '4拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.......x.....x.' },
+    { name: 'キックを4つ', hh: HH8, sd: SD24, bd: 'x.x.....x.x.....' },
+    { name: 'ライドで刻む', rd: HH8, sd: SD24, bd: 'x.....x.x.......' },
+  ] },
+  { short: 'シンバル', title: 'シンバルとオープンハイハット', desc: '記号の違いを読み分けます。○の付いたハイハットは、足をゆるめて開いた音です。', patterns: [
+    { name: '4拍目のウラでオープン', hh: 'x.x.x.x.x.x.x...', ho: '..............x.', sd: SD24, bd: 'x.......x.......' },
+    { name: '2拍目のウラでオープン', hh: 'x.x.x...x.x.x.x.', ho: '......x.........', sd: SD24, bd: 'x.......x.x.....' },
+    { name: '1拍目にクラッシュ', cr: 'x...............', hh: '..x.x.x.x.x.x.x.', sd: SD24, bd: 'x.......x.......' },
+    { name: 'ライドとペダル', rd: HH8, sd: SD24, bd: 'x.......x.......', hp: '....x.......x...' },
+    { name: 'ウラでペダル', rd: 'x...x...x...x...', sd: SD24, bd: 'x.......x.......', hp: '..x...x...x...x.' },
+    { name: 'スネアを続けて', hh: HH8, sd: '....x.......x.x.', bd: 'x.......x.x.....' },
+  ] },
+  { short: '16分HH', title: '16分のハイハット', desc: 'ハイハットを16分音符で。両手で交互に刻み、スネアを叩く所だけハイハットを休みます。', patterns: [
+    { name: '16分の基本', hh: HH16, sd: SD24, bd: 'x.......x.......' },
+    { name: '3拍目のウラにキック', hh: HH16, sd: SD24, bd: 'x.......x.x.....' },
+    { name: 'キックを4つ', hh: HH16, sd: SD24, bd: 'x.x.....x.x.....' },
+    { name: '2拍目のウラにキック', hh: HH16, sd: SD24, bd: 'x.....x.x.......' },
+    { name: '最後にオープン', hh: 'xxxx.xxxxxxx.x..', ho: '..............x.', sd: SD24, bd: 'x.......x.......' },
+  ] },
+  { short: '16分キック', title: '16分のキック', desc: 'ハイハットは8分のまま、キックが16分音符の位置に入ります。', patterns: [
+    { name: '2拍目の最後', hh: HH8, sd: SD24, bd: 'x......xx.......' },
+    { name: '1拍目の最後', hh: HH8, sd: SD24, bd: 'x..x....x.......' },
+    { name: '3拍目の最後', hh: HH8, sd: SD24, bd: 'x.......x..x....' },
+    { name: 'ウラと16分', hh: HH8, sd: SD24, bd: 'x.x....xx.......' },
+    { name: '1拍目に2つ', hh: HH8, sd: SD24, bd: 'x..x..x.x.......' },
+    { name: '16分を2か所', hh: HH8, sd: SD24, bd: 'x......xx..x....' },
+  ] },
+  { short: '16分スネア', title: '16分のスネア', desc: 'スネアが拍のウラや16分音符の位置に入るリズム。', patterns: [
+    { name: '2拍目の最後にスネア', hh: HH8, sd: '....x..x....x...', bd: 'x.......x.x.....' },
+    { name: '小節の最後にスネア', hh: HH8, sd: '....x.......x..x', bd: 'x.......x.x.....' },
+    { name: 'スネアを3つ', hh: HH8, sd: '....x..x.x..x...', bd: 'x.......x.......' },
+    { name: 'ハーフタイム', hh: HH8, sd: '........x.......', bd: 'x......x..x.....' },
+    { name: 'すき間を埋める', hh: HH8, sd: '....x..x.x..x..x', bd: 'x.x.....x.x.....' },
+  ] },
+  { short: 'フィル', title: 'フィルイン', desc: '最後の拍やまる1小節で、スネアやタムを回します。', patterns: [
+    { name: '4拍目にスネア16分', hh: 'x.x.x.x.x.x.....', sd: '....x.......xxxx', bd: 'x.......x.......' },
+    { name: '4拍目でタムを回す', hh: 'x.x.x.x.x.x.....', sd: '....x.......x...', t1: '.............x..', t2: '..............x.', ft: '...............x', bd: 'x.......x.......' },
+    { name: '8分で1周', sd: 'x.x.............', t1: '....x.x.........', t2: '........x.x.....', ft: '............x.x.', bd: 'x...x...x...x...' },
+    { name: '16分で1周', sd: 'xxxx............', t1: '....xxxx........', t2: '........xxxx....', ft: '............xxxx', bd: 'x...x...x...x...' },
+    { name: '後半でフィル', hh: 'x.x.x.x.........', sd: '....x...xxxx....', t2: '............xx..', ft: '..............xx', bd: 'x.......x.......' },
+    { name: '手・手・足', sd: 'xx..xx..xx..xx..', bd: '..x...x...x...x.' },
+  ] },
+  { short: 'ウラ拍', title: 'ウラ拍とシンコペーション', desc: '拍の頭ではない所に大事な音がくるリズム。', patterns: [
+    { name: 'ウラでオープン', hh: 'x...x...x...x...', ho: '..x...x...x...x.', sd: SD24, bd: 'x...x...x...x...' },
+    { name: 'ウラだけハイハット', hh: '..x...x...x...x.', sd: SD24, bd: 'x...x...x...x...' },
+    { name: 'ウラでクラッシュ', cr: '......x.........', hh: 'x.x.x...x.x.x.x.', sd: SD24, bd: 'x.....x.........' },
+    { name: 'キメ', cr: 'x.....x.....x...', sd: '..............x.', bd: 'x.....x.....x...' },
+    { name: 'ウラのキック', hh: HH8, sd: SD24, bd: 'x.....x.......x.' },
+  ] },
+];
+STAGES.forEach((st, si) => st.patterns.forEach((p, pi) => {
+  p.id = `${si + 1}-${pi + 1}`;
+  Object.keys(p).filter((k) => INST[k]).forEach((k) => {
+    if (!/^[x.]{16}$/.test(p[k])) throw new Error(`パターン ${p.id} の ${k} が16文字の x/. ではありません: ${p[k]}`);
+  });
+}));
+const lanesOf = (p) => INSTS.map((i) => i.id).filter((id) => p[id]);
+const CALIB_PATTERN = { id: 'calib', name: '補正の測定', sd: 'x...x...x...x...' };
+const CALIB_WIN = { perfect: 40, good: 160 };
+const JUDGE = { easy: { perfect: 50, good: 100 }, normal: { perfect: 30, good: 70 }, hard: { perfect: 20, good: 45 } };
+const CLEAR_RATE = 0.9;
+
+// ---- 設定と記録 ----
+const STORE_KEY = 'drumTrainer_v1';
+const DEFAULT_SETTINGS = {
+  mode: 'pattern', stage: 0, pat: 0, bpm: 80, passes: '2', metro: '4', judge: 'normal', latency: 0,
+  strictHH: false, midiSound: false, metroVol: 0.6, drumVol: 0.7, flashInsts: INSTS.map((i) => i.id), hint: false, midiMap: null,
+};
+const loadStore = () => {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.warn('記録を読み込めませんでした', e);
+    return {};
+  }
+};
+const stored = loadStore();
+const settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
+const emptyProgress = () => ({ patterns: {}, insts: {}, bars: 0, last: null, flash: {}, flashCount: 0, flashStreak: 0 });
+let progress = { ...emptyProgress(), ...(stored.progress || {}) };
+const save = () => {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ settings, progress }));
+  } catch (e) {
+    console.warn('記録を保存できませんでした', e);
+  }
+};
+const midiMap = () => settings.midiMap ?? defaultMidiMap();
+const win = () => JUDGE[settings.judge] ?? JUDGE.normal;
+const passesOf = () => (settings.passes === 'inf' ? Infinity : Number(settings.passes));
+const isHH = (id) => id === 'hh' || id === 'ho';
+const sameInst = (target, hit) => target === 'any' || target === hit || (!settings.strictHH && isHH(target) && isHH(hit));
+const currentPattern = () => STAGES[settings.stage].patterns[settings.pat];
+const median = (xs) => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const signed = (ms) => `${ms >= 0 ? '+' : '−'}${Math.abs(Math.round(ms))}ms`;
+
+// ---- 音（Web Audio で合成）----
+let actx = null;
+let metroBus = null;
+let drumBus = null;
+let noiseBuf = null;
+const audio = () => {
+  if (!actx) {
+    actx = new AudioContext({ latencyHint: 'interactive' });
+    metroBus = actx.createGain();
+    drumBus = actx.createGain();
+    metroBus.connect(actx.destination);
+    drumBus.connect(actx.destination);
+    noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+    const data = noiseBuf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  metroBus.gain.value = settings.metroVol;
+  drumBus.gain.value = settings.drumVol;
+  if (actx.state === 'suspended') actx.resume().catch((e) => console.warn('音を鳴らせません', e));
+  return actx;
+};
+const envelope = (g, t, peak, decay) => {
+  g.gain.setValueAtTime(peak, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+};
+const noise = (t, type, freq, peak, decay, q = 1) => {
+  const src = actx.createBufferSource();
+  const f = actx.createBiquadFilter();
+  const g = actx.createGain();
+  src.buffer = noiseBuf;
+  f.type = type; f.frequency.value = freq; f.Q.value = q;
+  src.connect(f).connect(g).connect(drumBus);
+  envelope(g, t, peak, decay);
+  src.start(t, Math.random() * 0.5);
+  src.stop(t + decay + 0.05);
+};
+const tone = (t, type, f0, f1, peak, decay, bus = drumBus) => {
+  const o = actx.createOscillator();
+  const g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f1, t + decay * 0.7);
+  o.connect(g).connect(bus);
+  envelope(g, t, peak, decay);
+  o.start(t);
+  o.stop(t + decay + 0.05);
+};
+const DRUM_SOUND = {
+  bd: (t) => tone(t, 'sine', 150, 45, 1, 0.35),
+  sd: (t) => { noise(t, 'highpass', 1500, 0.6, 0.18); tone(t, 'triangle', 220, 160, 0.5, 0.1); },
+  hh: (t) => noise(t, 'highpass', 7000, 0.35, 0.05),
+  ho: (t) => noise(t, 'highpass', 6500, 0.3, 0.4),
+  hp: (t) => noise(t, 'bandpass', 5000, 0.35, 0.04, 0.8),
+  t1: (t) => tone(t, 'sine', 260, 200, 0.8, 0.3),
+  t2: (t) => tone(t, 'sine', 190, 145, 0.8, 0.35),
+  ft: (t) => tone(t, 'sine', 120, 90, 0.9, 0.45),
+  cr: (t) => noise(t, 'highpass', 3500, 0.45, 1.3),
+  rd: (t) => { noise(t, 'highpass', 6000, 0.18, 0.6); tone(t, 'sine', 780, 760, 0.12, 0.5); },
+};
+const playDrum = (id, t) => DRUM_SOUND[id](t ?? audio().currentTime);
+const click = (t, level) => tone(t, 'square', level === 2 ? 1600 : 1100, level === 2 ? 1500 : 1000, level === 0 ? 0.08 : level === 2 ? 0.3 : 0.2, 0.03, metroBus);
+// AudioContext の時刻 → performance.now() の時刻への差（スピーカーから出る時刻に合わせる）
+const outputOffset = (ctx) => {
+  const ts = ctx.getOutputTimestamp ? ctx.getOutputTimestamp() : null;
+  return ts && ts.performanceTime > 0 ? ts.performanceTime - ts.contextTime * 1000 : null;
+};
+const perfOffset = (ctx) => outputOffset(ctx)
+  ?? performance.now() - ctx.currentTime * 1000 + (ctx.outputLatency || ctx.baseLatency || 0) * 1000;
+
+// ---- 楽譜の描画 ----
+const DUR = { 1: '16', 2: '8', 3: '8d', 4: 'q', 16: 'w' };
+const REST_KEY = { up: 'e/5', down: 'e/4' };
+const COLOR = { perfect: '#2e8b57', good: '#d9a21b', miss: '#c8433a' };
+
+// 拍ごとに区切って、音符と休符の並びにする
+const voiceEvents = (p, voice) => {
+  const lanes = INSTS.filter((i) => i.voice === voice && p[i.id]).map((i) => i.id);
+  const at = (slot) => lanes.filter((l) => p[l][slot] === 'x');
+  if (![...Array(16).keys()].some((s) => at(s).length)) return [{ rest: true, len: 16, slot: 0 }];
+  return [0, 1, 2, 3].flatMap((b) => {
+    const on = [0, 1, 2, 3].filter((s) => at(b * 4 + s).length);
+    if (!on.length) return [{ rest: true, len: 4, slot: b * 4 }];
+    const lead = on[0] ? [{ rest: true, len: on[0], slot: b * 4 }] : [];
+    return [...lead, ...on.map((s, i) => ({ rest: false, len: (on[i + 1] ?? 4) - s, slot: b * 4 + s, lanes: at(b * 4 + s) }))];
+  });
+};
+
+const addDots = (note) => (VF.Dot.buildAndAttach ? VF.Dot.buildAndAttach([note], { all: true }) : note.addDotToAll());
+
+const makeNote = (ev, voice) => {
+  const lanes = ev.rest ? [] : [...ev.lanes].sort((a, b) => keyStep(INST[a].key) - keyStep(INST[b].key));
+  const dur = DUR[ev.len];
+  const note = new VF.StaveNote({
+    keys: ev.rest ? [REST_KEY[voice]] : lanes.map((l) => INST[l].key),
+    duration: dur + (ev.rest ? 'r' : ''),
+    stem_direction: voice === 'up' ? 1 : -1,
+  });
+  if (dur.endsWith('d')) addDots(note);
+  lanes.forEach((l, i) => {
+    if (INST[l].open) note.addModifier(new VF.Annotation('o').setVerticalJustification(VF.Annotation.VerticalJustify.TOP), i);
+  });
+  return { note, lanes, slot: ev.slot };
+};
+
+let geom = null; // { timeline: [[slot, x]], top, bottom }
+
+const drawPattern = (p, colorOf) => {
+  const el = $('score');
+  el.innerHTML = '';
+  const w = Math.max(320, Math.floor(el.clientWidth));
+  const renderer = new VF.Renderer(el, VF.Renderer.Backends.SVG);
+  renderer.resize(w, 180);
+  const ctx = renderer.getContext();
+  const stave = new VF.Stave(4, 40, w - 10).addClef('percussion').addTimeSignature('4/4');
+  stave.setContext(ctx).draw();
+  const built = ['up', 'down'].map((v) => voiceEvents(p, v).map((ev) => makeNote(ev, v)));
+  built.flat().forEach((n) => n.lanes.forEach((l, i) => {
+    const c = colorOf(n.slot, l);
+    if (c) n.note.setKeyStyle(i, { fillStyle: c, strokeStyle: c });
+  }));
+  const voices = built.map((ns) => new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables(ns.map((n) => n.note)));
+  const beams = built.flatMap((ns, vi) => VF.Beam.generateBeams(ns.map((n) => n.note), {
+    groups: [new VF.Fraction(1, 4)], stem_direction: vi === 0 ? 1 : -1, beam_rests: false,
+  }));
+  new VF.Formatter().joinVoices(voices).formatToStave(voices, stave);
+  voices.forEach((v) => v.draw(ctx, stave));
+  beams.forEach((b) => b.setContext(ctx).draw());
+  const xs = new Map();
+  built.flat().forEach((n) => {
+    const x = (n.note.getNoteHeadBeginX() + n.note.getNoteHeadEndX()) / 2;
+    xs.set(n.slot, Math.min(xs.get(n.slot) ?? Infinity, x));
+  });
+  const timeline = [...xs].sort((a, b) => a[0] - b[0]);
+  timeline.push([16, stave.getNoteEndX() - 4]);
+  geom = { timeline, top: stave.getYForLine(0) - 22, bottom: stave.getYForLine(4) + 22 };
+};
+
+const slotToX = (f) => {
+  const tl = geom.timeline;
+  const i = Math.max(0, tl.findIndex(([s], j) => j === tl.length - 1 || tl[j + 1][0] > f));
+  const [s0, x0] = tl[i];
+  const [s1, x1] = tl[Math.min(i + 1, tl.length - 1)];
+  return s1 === s0 ? x0 : x0 + ((x1 - x0) * (f - s0)) / (s1 - s0);
+};
+
+const drawSingle = (el, instId, color, width, height, withClef, fluid = false) => {
+  el.innerHTML = '';
+  const renderer = new VF.Renderer(el, VF.Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const ctx = renderer.getContext();
+  const stave = new VF.Stave(4, Math.round(height * 0.22), width - 8);
+  if (withClef) stave.addClef('percussion');
+  stave.setContext(ctx).draw();
+  // 1つだけの音符は譜表の中央へ
+  stave.setNoteStartX((stave.getNoteStartX() + stave.getNoteEndX()) / 2 - 8);
+  const { note } = makeNote({ rest: false, len: 4, slot: 0, lanes: [instId] }, INST[instId].voice);
+  if (color) note.setKeyStyle(0, { fillStyle: color, strokeStyle: color });
+  const voice = new VF.Voice({ num_beats: 1, beat_value: 4 }).addTickables([note]);
+  new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
+  voice.draw(ctx, stave);
+  const svg = el.querySelector('svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  if (fluid) { svg.style.width = ''; svg.style.height = ''; }
+  return svg;
+};
+
+const renderLegend = () => {
+  const box = $('legend');
+  box.innerHTML = '';
+  INSTS.forEach((i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    const fig = document.createElement('div');
+    item.append(fig);
+    drawSingle(fig, i.id, null, 90, 130, false);
+    const cap = document.createElement('div');
+    cap.textContent = i.name;
+    item.append(cap);
+    box.append(item);
+  });
+};
+
+// ---- 状態 ----
+let run = null;   // 演奏中のデータ
+let view = null;  // 楽譜に色を付けて見せている演奏（終わった後も残す）
+let flash = null; // 楽器フラッシュの出題
+let learning = null; // MIDI割り当ての学習中の楽器
+
+const colorOf = (slot, lane) => {
+  if (!view) return null;
+  const t = view.targets.find((x) => x.pass === view.displayPass && x.slot === slot && x.lane === lane);
+  return t && t.result ? COLOR[t.result] : null;
+};
+
+const renderMarks = () => {
+  const box = $('marks');
+  box.innerHTML = '';
+  if (!view || !geom || settings.mode !== 'pattern') return;
+  view.extras.filter((e) => e.pass === view.displayPass).forEach((e) => {
+    const m = document.createElement('div');
+    m.className = 'extra-mark';
+    m.style.left = `${slotToX(Math.min(15.99, Math.max(0, e.slotF)))}px`;
+    m.style.top = `${geom.top - 8}px`;
+    box.append(m);
+  });
+};
+
+const render = () => {
+  if (settings.mode === 'flash') {
+    if (flash) drawSingle($('score'), flash.inst, flash.color, 170, 150, true, true);
+    geom = null;
+  } else {
+    drawPattern(view ? view.pattern : currentPattern(), colorOf);
+  }
+  renderMarks();
+};
+let renderQueued = false;
+const markDirty = () => {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
+};
+
+const setFeedback = (cls, text) => {
+  $('feedback').className = `feedback ${cls}`;
+  $('feedback').textContent = text;
+};
+let countText = '';
+const setCount = (html) => {
+  if (html === countText) return;
+  countText = html;
+  $('count').innerHTML = html;
+};
+
+// ---- パターン読譜：演奏 ----
+const base = (r) => r.startAudio * 1000 + r.offset;
+
+const ensureTargets = (r, pass) => {
+  if (pass >= r.passes || r.made.has(pass)) return;
+  r.made.add(pass);
+  lanesOf(r.pattern).forEach((lane) => [...r.pattern[lane]].forEach((c, slot) => {
+    if (c === 'x') r.targets.push({ pass, slot, lane, inst: r.calib ? 'any' : lane, rel: (16 + pass * 16 + slot) * r.s16, result: null, offset: null });
+  }));
+};
+
+const schedule = (r) => {
+  const ahead = actx.currentTime + 0.15;
+  while (r.k < r.total && r.startAudio + (r.k * r.s16) / 1000 < ahead) {
+    const t = r.startAudio + (r.k * r.s16) / 1000;
+    const k = r.k;
+    r.k += 1;
+    if (k < 16) { if (k % 4 === 0) click(t, k === 0 ? 2 : 1); continue; }
+    const slot = (k - 16) % 16;
+    if (slot === 0) ensureTargets(r, Math.floor((k - 16) / 16) + 1);
+    if (r.metro === '4' && slot % 4 === 0) click(t, slot === 0 ? 2 : 1);
+    if (r.metro === '8' && slot % 2 === 0) click(t, slot === 0 ? 2 : slot % 4 === 0 ? 1 : 0);
+    if (r.demo) lanesOf(r.pattern).forEach((l) => { if (r.pattern[l][slot] === 'x') playDrum(l, t); });
+  }
+};
+
+const frame = () => {
+  const r = run;
+  if (!r) return;
+  const now = performance.now();
+  // カウントの間は時刻の対応を測り直して、ならす
+  const off = now < base(r) + 12 * r.s16 ? outputOffset(actx) : null;
+  if (off !== null) {
+    r.offSamples.push(off);
+    r.offset = median(r.offSamples);
+  }
+  const b = base(r);
+  const pos = (now - b) / r.s16 - 16;
+  if (pos < 0) {
+    const beat = Math.floor((pos + 16) / 4) + 1;
+    setCount(beat >= 1 ? `${beat} <small>${r.calib ? 'クリックに合わせて叩く' : 'カウント'}</small>` : '');
+    $('playhead').hidden = true;
+  } else {
+    const pass = Math.floor(pos / 16);
+    if (pass < r.passes) {
+      if (pass !== r.displayPass) { r.displayPass = pass; markDirty(); }
+      setCount(r.demo ? '♪ <small>お手本</small>' : `${pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目</small>`);
+      if (geom) {
+        const ph = $('playhead');
+        ph.hidden = false;
+        ph.style.left = `${slotToX(pos % 16)}px`;
+        ph.style.top = `${geom.top}px`;
+        ph.style.height = `${geom.bottom - geom.top}px`;
+      }
+    } else {
+      $('playhead').hidden = true;
+    }
+  }
+  const w = r.calib ? CALIB_WIN : win();
+  const nowC = now - (r.calib ? 0 : settings.latency);
+  let missed = false;
+  r.targets.forEach((x) => {
+    if (x.result === null && nowC > b + x.rel + w.good) { x.result = 'miss'; missed = true; }
+  });
+  if (missed && !r.demo) { setFeedback('ng', 'Miss'); markDirty(); }
+  const endT = b + r.total * r.s16 + (r.demo ? 300 : w.good + 30);
+  if (Number.isFinite(r.total) && nowC > endT) { finishRun(); return; }
+  r.raf = requestAnimationFrame(frame);
+};
+
+const setRunningUI = (on) => {
+  $('startBtn').hidden = on;
+  $('stopBtn').hidden = !on;
+  $('demoBtn').disabled = on;
+  $('calibBtn').disabled = on;
+};
+
+let starting = false;
+const startRun = async ({ demo = false, calib = false } = {}) => {
+  if (starting) return;
+  cancelRun();
+  if (calib && settings.mode !== 'pattern') setMode('pattern');
+  const ctx = audio();
+  // 起動直後の AudioContext は時刻が止まっているので、動き出してから時刻を決める
+  if (ctx.state !== 'running') {
+    starting = true;
+    try {
+      await ctx.resume();
+    } catch (e) {
+      setFeedback('ng', `音を鳴らせません: ${e.message}`);
+      return;
+    } finally {
+      starting = false;
+    }
+  }
+  const pattern = calib ? CALIB_PATTERN : currentPattern();
+  const s16 = 60000 / settings.bpm / 4;
+  const passes = calib ? 4 : demo ? 1 : passesOf();
+  run = {
+    pattern, demo, calib, s16, passes, bpm: settings.bpm, total: 16 + passes * 16, k: 0,
+    startAudio: ctx.currentTime + 0.3, offset: perfOffset(ctx), offSamples: [],
+    targets: [], extras: [], made: new Set(), displayPass: 0, metro: calib ? '4' : settings.metro,
+  };
+  ensureTargets(run, 0);
+  view = run;
+  $('result').hidden = true;
+  setFeedback('', calib ? 'どのパッドでもよいので、クリック音にぴったり合わせて叩いてください（16回）' : '');
+  setRunningUI(true);
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  render();
+  schedule(run);
+  run.timer = setInterval(() => run && schedule(run), 25);
+  run.raf = requestAnimationFrame(frame);
+};
+
+const stopTimers = (r) => {
+  clearInterval(r.timer);
+  cancelAnimationFrame(r.raf);
+  $('playhead').hidden = true;
+  setCount('');
+  setRunningUI(false);
+};
+
+// 結果を出さずにやめる（パターンを変えたときなど）
+const cancelRun = () => {
+  if (!run) return;
+  stopTimers(run);
+  run = null;
+  view = null;
+};
+
+const judgeHit = (r, inst, tRaw) => {
+  if (r.demo) return;
+  const t = r.calib ? tRaw : tRaw - settings.latency;
+  const w = r.calib ? CALIB_WIN : win();
+  const b = base(r);
+  if (t < b + 16 * r.s16 - w.good) return; // カウント中
+  const dist = (x) => Math.abs(t - (b + x.rel));
+  const cand = r.targets
+    .filter((x) => x.result === null && sameInst(x.inst, inst) && dist(x) <= w.good)
+    .sort((x, y) => dist(x) - dist(y))[0];
+  if (!cand) {
+    const pos = (t - b) / r.s16 - 16;
+    r.extras.push({ inst, pass: Math.floor(pos / 16), slotF: pos - Math.floor(pos / 16) * 16 });
+    setFeedback('ng', `余分：${INST[inst].name}`);
+    markDirty();
+    return;
+  }
+  const dt = t - (b + cand.rel);
+  cand.offset = dt;
+  cand.result = Math.abs(dt) <= w.perfect ? 'perfect' : 'good';
+  if (r.calib) setFeedback('ok', `${signed(dt)}`);
+  else if (cand.result === 'perfect') setFeedback('ok', 'Perfect');
+  else setFeedback('good', `Good（${dt < 0 ? '早い' : '遅い'} ${Math.abs(Math.round(dt))}ms）`);
+  markDirty();
+};
+
+const summarize = (targets, extras) => {
+  const count = (k) => targets.filter((x) => x.result === k).length;
+  const offs = targets.filter((x) => x.result === 'perfect' || x.result === 'good').map((x) => x.offset);
+  const mean = offs.length ? offs.reduce((a, b) => a + b, 0) / offs.length : null;
+  const sd = offs.length > 1 ? Math.sqrt(offs.reduce((a, b) => a + (b - mean) ** 2, 0) / offs.length) : null;
+  return {
+    perfect: count('perfect'), good: count('good'), miss: count('miss'), extra: extras.length,
+    rate: offs.length / Math.max(1, targets.length + extras.length), mean, sd,
+  };
+};
+
+const tendency = (mean) => (Math.abs(mean) < 10 ? 'ほぼぴったり' : mean < 0 ? (mean < -25 ? '早め' : '少し早め') : (mean > 25 ? '遅め' : '少し遅め'));
+
+const finishCalib = (r) => {
+  const offs = r.targets.filter((x) => x.offset !== null).map((x) => x.offset);
+  view = null;
+  render();
+  if (offs.length < 8) {
+    setFeedback('ng', `測れたのは${offs.length}回でした。8回以上叩けるように、もう一度測ってください。`);
+    return;
+  }
+  settings.latency = Math.round(median(offs));
+  save();
+  syncSettingsUI();
+  setFeedback('ok', `タイミングの補正を ${signed(settings.latency)} にしました（${offs.length}回を測定）`);
+};
+
+const finishRun = () => {
+  const r = run;
+  if (!r) return;
+  stopTimers(r);
+  run = null;
+  if (r.demo) { view = null; render(); return; }
+  const w = r.calib ? CALIB_WIN : win();
+  const nowC = performance.now() - (r.calib ? 0 : settings.latency);
+  const b = base(r);
+  // まだ来ていない音符は数えない
+  r.targets = r.targets.filter((x) => x.result !== null || b + x.rel + w.good < nowC);
+  r.targets.forEach((x) => { if (x.result === null) x.result = 'miss'; });
+  if (r.calib) { finishCalib(r); return; }
+  const played = Math.max(0, Math.min(r.passes, Math.floor((nowC - b - 16 * r.s16 + w.good) / (16 * r.s16))));
+  if (!r.targets.length) {
+    view = null;
+    render();
+    setFeedback('', '止めました');
+    return;
+  }
+  r.displayPass = Math.max(0, Math.min(r.displayPass, played - 1));
+  const s = summarize(r.targets, r.extras);
+  const cleared = s.rate >= CLEAR_RATE && played >= 1;
+  const p = r.pattern;
+  const rec = progress.patterns[p.id] ?? { best: 0, bestBpm: 0, cleared: false, clearBpm: 0, plays: 0 };
+  rec.plays += 1;
+  if (s.rate > rec.best || (s.rate === rec.best && r.bpm > rec.bestBpm)) { rec.best = s.rate; rec.bestBpm = r.bpm; }
+  if (cleared) { rec.cleared = true; rec.clearBpm = Math.max(rec.clearBpm, r.bpm); }
+  progress.patterns[p.id] = rec;
+  r.targets.forEach((x) => {
+    const st = progress.insts[x.lane] ?? { n: 0, miss: 0 };
+    st.n += 1;
+    if (x.result === 'miss') st.miss += 1;
+    progress.insts[x.lane] = st;
+  });
+  progress.bars += played;
+  if (s.mean !== null) progress.last = { mean: s.mean, sd: s.sd };
+  save();
+  view = r;
+  render();
+  showResult(r, s, cleared);
+  renderPatternBar();
+  renderInfo();
+  renderStats();
+};
+
+const showResult = (r, s, cleared) => {
+  const missLanes = [...new Set(r.targets.filter((x) => x.result === 'miss').map((x) => x.lane))];
+  const el = $('result');
+  el.className = `result only-pattern ${cleared ? 'clear' : 'fail'}`;
+  el.innerHTML = `
+    <h2>${cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
+    <p class="big">ヒット率 <b>${Math.round(s.rate * 100)}%</b> <span class="sub">（クリアは${CLEAR_RATE * 100}%以上・BPM ${r.bpm}）</span></p>
+    <p>Perfect ${s.perfect}・Good ${s.good}・Miss ${s.miss}・余分 ${s.extra}</p>
+    ${s.mean !== null ? `<p>平均のずれ ${signed(s.mean)}（${tendency(s.mean)}）${s.sd !== null ? `・ばらつき ±${Math.round(s.sd)}ms` : ''}</p>` : ''}
+    ${missLanes.length ? `<p class="sub">ミスがあった楽器：${missLanes.map((l) => INST[l].name).join('、')}</p>` : ''}
+    <div class="controls">
+      <button type="button" data-act="again">もう一度（Enter）</button>
+      ${cleared ? '<button type="button" class="ghost" data-act="faster">BPMを10上げてもう一度</button>' : ''}
+      <button type="button" class="ghost" data-act="next">次のパターン →</button>
+    </div>`;
+  el.hidden = false;
+  setFeedback('', '');
+};
+
+// ---- 楽器フラッシュ ----
+const pickFlash = () => {
+  const pool = settings.flashInsts.filter((id) => INST[id]);
+  if (!pool.length) return null;
+  const weights = pool.map((id) => {
+    if (pool.length > 1 && flash && flash.inst === id) return 0;
+    const s = progress.flash[id];
+    if (!s || !s.n) return 3;
+    const missRate = 1 - s.first / s.n;
+    const avg = s.first ? s.time / s.first : 2;
+    return 1 + missRate * 6 + Math.max(0, avg - 0.8) * 2;
+  });
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  return pool.find((_, i) => (r -= weights[i]) < 0) ?? pool[pool.length - 1];
+};
+
+const showFlashHint = () => { $('nameHint').textContent = flash && (settings.hint || flash.wrong >= 2 || flash.reveal) ? INST[flash.inst].name : ''; };
+
+const nextFlash = () => {
+  clearTimeout(nextFlash.timer);
+  if (settings.mode !== 'flash') return;
+  const id = pickFlash();
+  if (!id) {
+    flash = null;
+    $('score').innerHTML = '';
+    setFeedback('ng', '設定の「出題する楽器」を1つ以上選んでください');
+    return;
+  }
+  flash = { inst: id, shownAt: performance.now(), wrong: 0, done: false, reveal: false, color: null };
+  render();
+  showFlashHint();
+  setFeedback('', '');
+};
+
+const recordFlash = (id, firstTry, sec) => {
+  const s = progress.flash[id] ?? { n: 0, first: 0, time: 0 };
+  s.n += 1;
+  if (firstTry) { s.first += 1; s.time += sec; }
+  progress.flash[id] = s;
+  progress.flashCount += firstTry || sec !== null ? 1 : 0;
+  progress.flashStreak = firstTry ? progress.flashStreak + 1 : 0;
+  save();
+  renderStats();
+};
+
+const flashHit = (inst, t) => {
+  if (!flash || flash.done) return;
+  if (sameInst(flash.inst, inst)) {
+    const sec = Math.max(0, (t - flash.shownAt) / 1000);
+    flash.done = true;
+    flash.color = COLOR.perfect;
+    recordFlash(flash.inst, flash.wrong === 0, sec);
+    setFeedback('ok', `◯ ${INST[flash.inst].name}（${sec.toFixed(2)}秒）`);
+    render();
+    nextFlash.timer = setTimeout(nextFlash, 550);
+  } else {
+    flash.wrong += 1;
+    flash.color = COLOR.miss;
+    setFeedback('ng', `× いまのは${INST[inst].name}`);
+    showFlashHint();
+    render();
+  }
+};
+
+const skipFlash = () => {
+  if (!flash || flash.done) return;
+  flash.done = true;
+  flash.reveal = true;
+  recordFlash(flash.inst, false, null);
+  showFlashHint();
+  setFeedback('', `正解は ${INST[flash.inst].name}`);
+  nextFlash.timer = setTimeout(nextFlash, 1400);
+};
+
+// ---- 入力 ----
+const flashPad = (id) => {
+  const pad = document.querySelector(`.pad[data-inst="${id}"]`);
+  if (!pad) return;
+  pad.classList.add('hit');
+  clearTimeout(pad._t);
+  pad._t = setTimeout(() => pad.classList.remove('hit'), 110);
+};
+
+const onHit = (inst, t, source) => {
+  flashPad(inst);
+  if (source !== 'midi' || settings.midiSound) playDrum(inst);
+  if (run) judgeHit(run, inst, t);
+  else if (settings.mode === 'flash') flashHit(inst, t);
+};
+
+const assignMidi = (inst, note) => {
+  const map = Object.fromEntries(Object.entries(midiMap()).map(([k, ns]) => [k, ns.filter((n) => n !== note)]));
+  map[inst] = [...map[inst], note].sort((a, b) => a - b);
+  settings.midiMap = map;
+  learning = null;
+  save();
+  renderMap();
+  $('midiMonitor').textContent = `${note} を ${INST[inst].name} に割り当てました`;
+};
+
+const noteToInst = (note) => Object.entries(midiMap()).find(([, ns]) => ns.includes(note))?.[0] ?? null;
+
+const onMidiMessage = (e) => {
+  const [status, note, vel] = e.data;
+  if ((status & 0xf0) !== 0x90 || !vel) return;
+  if (learning) { assignMidi(learning, note); return; }
+  const inst = noteToInst(note);
+  $('midiMonitor').textContent = `最後に受け取った番号：${note}（${inst ? INST[inst].name : '割り当てなし'}）`;
+  if (inst) onHit(inst, e.timeStamp || performance.now(), 'midi');
+};
+
+const setMidiStatus = (cls, text) => {
+  $('midiStatus').className = `midi-status ${cls}`;
+  $('midiStatus').textContent = text;
+};
+
+const initMidi = async () => {
+  if (!navigator.requestMIDIAccess) {
+    setMidiStatus('off', 'このブラウザはMIDIに対応していません');
+    return;
+  }
+  try {
+    const access = await navigator.requestMIDIAccess();
+    const update = () => {
+      const inputs = [...access.inputs.values()];
+      inputs.forEach((i) => { i.onmidimessage = onMidiMessage; });
+      if (inputs.length) setMidiStatus('on', `接続中: ${inputs.map((i) => i.name).join('、')}`);
+      else setMidiStatus('off', 'MIDI機器が見つかりません（つなぐと自動で認識します）');
+    };
+    access.onstatechange = update;
+    update();
+  } catch (e) {
+    setMidiStatus('off', e.name === 'NotAllowedError'
+      ? 'MIDIが許可されていません。アドレスバー左のアイコン →「サイトの設定」→「MIDI デバイス」を「許可」にして再読み込みしてください'
+      : `MIDIを使えません: ${e.message}`);
+  }
+};
+
+// ---- 画面の組み立て ----
+const renderPads = () => {
+  $('pads').innerHTML = PAD_ORDER.map((id) => {
+    const i = INST[id];
+    return `<button type="button" class="pad ${i.kind}" data-inst="${id}" tabindex="-1">${i.pad}<kbd>${i.label}</kbd></button>`;
+  }).join('');
+};
+
+const renderStageBar = () => {
+  $('stageBar').innerHTML = STAGES.map((st, i) =>
+    `<button type="button" data-stage="${i}" aria-pressed="${i === settings.stage}" title="${st.title}">${i + 1} ${st.short}</button>`).join('');
+};
+
+const renderPatternBar = () => {
+  const st = STAGES[settings.stage];
+  $('patBar').innerHTML = st.patterns.map((p, i) =>
+    `<button type="button" data-pat="${i}" aria-pressed="${i === settings.pat}" class="${progress.patterns[p.id]?.cleared ? 'done' : ''}" title="${p.name}">${p.id}</button>`).join('');
+};
+
+const renderInfo = () => {
+  if (settings.mode === 'flash') {
+    $('stageInfo').innerHTML = '<b>楽器フラッシュ</b>　出た音符の楽器を叩きます。間違えやすい楽器ほど多く出ます。';
+    return;
+  }
+  const st = STAGES[settings.stage];
+  const p = currentPattern();
+  const rec = progress.patterns[p.id];
+  const cleared = st.patterns.filter((q) => progress.patterns[q.id]?.cleared).length;
+  const recText = rec ? `最高 ${Math.round(rec.best * 100)}%（BPM ${rec.bestBpm}）${rec.cleared ? `・クリア済み（最速 BPM ${rec.clearBpm}）` : ''}` : 'まだ叩いていません';
+  $('stageInfo').innerHTML = `<b>ステージ${settings.stage + 1}　${st.title}</b>（クリア ${cleared} / ${st.patterns.length}）<br>${st.desc}<br><b>${p.id}「${p.name}」</b>　${recText}`;
+};
+
+const statBox = (v, label) => `<div class="stat"><b>${v}</b><span>${label}</span></div>`;
+
+const renderStats = () => {
+  if (settings.mode === 'flash') {
+    const all = Object.values(progress.flash);
+    const n = all.reduce((a, s) => a + s.n, 0);
+    const first = all.reduce((a, s) => a + s.first, 0);
+    const time = all.reduce((a, s) => a + s.time, 0);
+    $('stats').innerHTML = statBox(progress.flashCount, '正解した数')
+      + statBox(n ? `${Math.round((first / n) * 100)}%` : '–', '一発正解率')
+      + statBox(first ? `${(time / first).toFixed(2)}秒` : '–', '平均反応時間')
+      + statBox(progress.flashStreak, '連続一発正解');
+    const weak = Object.entries(progress.flash).filter(([, s]) => s.n >= 3 && s.first / s.n < 0.8)
+      .sort((a, b) => a[1].first / a[1].n - b[1].first / b[1].n).slice(0, 3);
+    $('weak').innerHTML = weak.length ? `苦手な楽器：${weak.map(([id, s]) => `<strong>${INST[id].name}</strong>（${Math.round((s.first / s.n) * 100)}%）`).join('、')}` : '';
+    return;
+  }
+  const all = STAGES.flatMap((s) => s.patterns);
+  const cleared = all.filter((p) => progress.patterns[p.id]?.cleared).length;
+  $('stats').innerHTML = statBox(`${cleared} / ${all.length}`, 'クリアしたパターン')
+    + statBox(progress.bars, '叩いた小節')
+    + statBox(progress.last ? signed(progress.last.mean) : '–', '前回の平均のずれ')
+    + statBox(progress.last && progress.last.sd !== null ? `±${Math.round(progress.last.sd)}ms` : '–', '前回のばらつき');
+  const weak = Object.entries(progress.insts).filter(([, s]) => s.n >= 8 && s.miss / s.n > 0.1)
+    .sort((a, b) => b[1].miss / b[1].n - a[1].miss / a[1].n).slice(0, 3);
+  $('weak').innerHTML = weak.length ? `ミスが多い楽器：${weak.map(([id, s]) => `<strong>${INST[id].name}</strong>（ミス ${Math.round((s.miss / s.n) * 100)}%）`).join('、')}` : '';
+};
+
+const renderMap = () => {
+  const map = midiMap();
+  $('mapTable').innerHTML = INSTS.map((i) => `
+    <div class="map-row">
+      <span>${i.name}</span>
+      <span class="map-nums">${map[i.id].map((n) => `<button type="button" class="chip" data-rm="${i.id}:${n}" title="この番号を外す">${n} ×</button>`).join('') || '<small>なし</small>'}</span>
+      <button type="button" class="ghost small ${learning === i.id ? 'learning' : ''}" data-learn="${i.id}">${learning === i.id ? 'パッドを叩いてください…' : '叩いて追加'}</button>
+    </div>`).join('');
+};
+
+const renderFlashChecks = () => {
+  $('flashChecks').innerHTML = INSTS.map((i) =>
+    `<label class="check"><input type="checkbox" data-fi="${i.id}" ${settings.flashInsts.includes(i.id) ? 'checked' : ''}>${i.name}</label>`).join('');
+};
+
+const syncSettingsUI = () => {
+  document.body.dataset.mode = settings.mode;
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.mode)));
+  document.querySelectorAll('#judgeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.judge)));
+  const w = win();
+  $('judgeNote').textContent = `Perfect ±${w.perfect}ms ／ Good ±${w.good}ms`;
+  $('bpmInput').value = settings.bpm;
+  $('passesSel').value = settings.passes;
+  $('metroSel').value = settings.metro;
+  $('latencyInput').value = settings.latency;
+  $('strictHHChk').checked = settings.strictHH;
+  $('midiSoundChk').checked = settings.midiSound;
+  $('metroVol').value = settings.metroVol;
+  $('drumVol').value = settings.drumVol;
+  $('hintChk').checked = settings.hint;
+};
+
+const selectPattern = (stage, pat) => {
+  cancelRun();
+  settings.stage = stage;
+  settings.pat = pat;
+  save();
+  view = null;
+  $('result').hidden = true;
+  setFeedback('', '');
+  renderStageBar();
+  renderPatternBar();
+  renderInfo();
+  render();
+};
+
+const stepPattern = (d) => {
+  const flat = STAGES.flatMap((st, si) => st.patterns.map((_, pi) => [si, pi]));
+  const i = flat.findIndex(([si, pi]) => si === settings.stage && pi === settings.pat);
+  const [si, pi] = flat[(i + d + flat.length) % flat.length];
+  selectPattern(si, pi);
+};
+
+// いま選んでいるステージまでで、クリアしていない・成績の低いパターンを選ぶ
+const pickWeakPattern = () => {
+  const cands = STAGES.slice(0, settings.stage + 1).flatMap((st, si) => st.patterns.map((p, pi) => ({ si, pi, rec: progress.patterns[p.id] })))
+    .filter((c) => !(c.si === settings.stage && c.pi === settings.pat));
+  const notCleared = cands.filter((c) => !c.rec?.cleared);
+  const pool = notCleared.length ? notCleared : cands;
+  if (!pool.length) return;
+  const weights = pool.map((c) => (c.rec ? 1.05 - c.rec.best : 0.3));
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  const c = pool.find((_, i) => (r -= weights[i]) < 0) ?? pool[0];
+  selectPattern(c.si, c.pi);
+};
+
+const setMode = (mode) => {
+  cancelRun();
+  clearTimeout(nextFlash.timer);
+  settings.mode = mode;
+  save();
+  syncSettingsUI();
+  setFeedback('', '');
+  $('result').hidden = true;
+  renderInfo();
+  renderStats();
+  if (mode === 'flash') nextFlash();
+  else { flash = null; $('nameHint').textContent = ''; render(); }
+};
+
+const setBpm = (v) => {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return;
+  settings.bpm = Math.min(200, Math.max(40, n));
+  save();
+  $('bpmInput').value = settings.bpm;
+};
+
+// ---- イベント ----
+$('modeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b && b.dataset.v !== settings.mode) setMode(b.dataset.v);
+});
+$('stageBar').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) selectPattern(Number(b.dataset.stage), 0);
+});
+$('patBar').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) selectPattern(settings.stage, Number(b.dataset.pat));
+});
+$('startBtn').addEventListener('click', () => startRun());
+$('stopBtn').addEventListener('click', () => finishRun());
+$('demoBtn').addEventListener('click', () => startRun({ demo: true }));
+$('prevBtn').addEventListener('click', () => stepPattern(-1));
+$('nextBtn').addEventListener('click', () => stepPattern(1));
+$('weakBtn').addEventListener('click', pickWeakPattern);
+$('skipBtn').addEventListener('click', skipFlash);
+$('bpmDown').addEventListener('click', () => setBpm(settings.bpm - 5));
+$('bpmUp').addEventListener('click', () => setBpm(settings.bpm + 5));
+$('bpmInput').addEventListener('change', (e) => setBpm(e.target.value));
+$('result').addEventListener('click', (e) => {
+  const act = e.target.closest('button')?.dataset.act;
+  if (act === 'again') startRun();
+  if (act === 'faster') { setBpm(settings.bpm + 10); startRun(); }
+  if (act === 'next') stepPattern(1);
+});
+$('pads').addEventListener('pointerdown', (e) => {
+  const pad = e.target.closest('.pad');
+  if (!pad) return;
+  e.preventDefault();
+  onHit(pad.dataset.inst, e.timeStamp, 'pad');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest && e.target.closest('input, select, textarea')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const inst = CODE_TO_INST[e.code];
+  if (inst) {
+    e.preventDefault();
+    if (!e.repeat) onHit(inst, e.timeStamp, 'key');
+    return;
+  }
+  if (e.key === 'Enter' && settings.mode === 'pattern' && !run) { e.preventDefault(); startRun(); }
+  if (e.key === 'Escape' && run) { e.preventDefault(); finishRun(); }
+  if (e.key === 'ArrowRight' && settings.mode === 'pattern' && !run) stepPattern(1);
+  if (e.key === 'ArrowLeft' && settings.mode === 'pattern' && !run) stepPattern(-1);
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'Space' && !(e.target.closest && e.target.closest('input, select, textarea'))) e.preventDefault(); });
+$('passesSel').addEventListener('change', (e) => { settings.passes = e.target.value; save(); });
+$('metroSel').addEventListener('change', (e) => { settings.metro = e.target.value; save(); });
+$('judgeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  settings.judge = b.dataset.v;
+  save();
+  syncSettingsUI();
+});
+$('latencyInput').addEventListener('change', (e) => {
+  const n = Math.round(Number(e.target.value));
+  settings.latency = Number.isFinite(n) ? Math.min(200, Math.max(-200, n)) : 0;
+  save();
+  syncSettingsUI();
+});
+$('calibBtn').addEventListener('click', () => startRun({ calib: true }));
+$('strictHHChk').addEventListener('change', (e) => { settings.strictHH = e.target.checked; save(); });
+$('midiSoundChk').addEventListener('change', (e) => { settings.midiSound = e.target.checked; save(); });
+$('metroVol').addEventListener('input', (e) => { settings.metroVol = Number(e.target.value); save(); if (metroBus) metroBus.gain.value = settings.metroVol; });
+$('drumVol').addEventListener('input', (e) => { settings.drumVol = Number(e.target.value); save(); if (drumBus) drumBus.gain.value = settings.drumVol; });
+$('hintChk').addEventListener('change', (e) => { settings.hint = e.target.checked; save(); showFlashHint(); });
+$('flashChecks').addEventListener('change', (e) => {
+  const id = e.target.dataset.fi;
+  if (!id) return;
+  settings.flashInsts = e.target.checked ? [...new Set([...settings.flashInsts, id])] : settings.flashInsts.filter((x) => x !== id);
+  save();
+  if (settings.mode === 'flash' && (!flash || !settings.flashInsts.includes(flash.inst))) nextFlash();
+});
+$('mapTable').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.learn) {
+    learning = learning === b.dataset.learn ? null : b.dataset.learn;
+    renderMap();
+  } else if (b.dataset.rm) {
+    const [id, n] = b.dataset.rm.split(':');
+    const map = midiMap();
+    settings.midiMap = { ...map, [id]: map[id].filter((x) => x !== Number(n)) };
+    save();
+    renderMap();
+  }
+});
+$('mapResetBtn').addEventListener('click', () => {
+  settings.midiMap = null;
+  learning = null;
+  save();
+  renderMap();
+});
+$('resetBtn').addEventListener('click', () => {
+  if (!confirm('パターンのクリア記録と、楽器フラッシュの成績を消します。よろしいですか？')) return;
+  progress = emptyProgress();
+  save();
+  renderPatternBar();
+  renderInfo();
+  renderStats();
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && run) cancelRun(); });
+window.addEventListener('resize', () => markDirty());
+
+// ---- 開始 ----
+renderPads();
+renderStageBar();
+renderPatternBar();
+renderFlashChecks();
+renderMap();
+renderLegend();
+syncSettingsUI();
+renderInfo();
+renderStats();
+if (settings.mode === 'flash') nextFlash(); else render();
+initMidi();
+</script>
+</body>
+</html>

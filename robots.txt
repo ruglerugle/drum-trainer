@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://drum-trainer.habatakijuku.com/sitemap.xml
