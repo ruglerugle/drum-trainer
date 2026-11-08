@@ -461,17 +461,40 @@ const loadStore = () => {
     return {};
   }
 };
+// 端末ごとの値（タイミング補正・MIDI割り当て・前回のずれ）は別のキーに置く。
+// drumTrainer_v1 は学習記録（my.habatakijuku.com）でほかの端末と同期されるが、こちらは同期しない
+const DEVICE_KEY = 'drumTrainer_device_v1';
+const loadDevice = () => {
+  try {
+    const raw = localStorage.getItem(DEVICE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('端末の設定を読み込めませんでした', e);
+    return null;
+  }
+};
 const stored = loadStore();
+const device = loadDevice();
 const settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
 const emptyProgress = () => ({ patterns: {}, insts: {}, bars: 0, last: null, flash: {}, flashCount: 0, flashStreak: 0 });
 let progress = { ...emptyProgress(), ...(stored.progress || {}) };
+// 端末のキーがあればそちらを使う（同期で入ってきたほかの端末の値は使わない）。なければ今の値を引き継ぐ
+if (device) {
+  settings.latency = Number.isFinite(device.latency) ? device.latency : 0;
+  settings.midiMap = device.midiMap ?? null;
+  progress.last = device.last ?? null;
+}
 const save = () => {
+  const { latency, midiMap, ...sharedSettings } = settings;
+  const { last, ...sharedProgress } = progress;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ settings, progress }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ settings: sharedSettings, progress: sharedProgress }));
+    localStorage.setItem(DEVICE_KEY, JSON.stringify({ latency, midiMap, last }));
   } catch (e) {
     console.warn('記録を保存できませんでした', e);
   }
 };
+if (!device) save();
 const midiMap = () => settings.midiMap ?? defaultMidiMap();
 const win = () => JUDGE[settings.judge] ?? JUDGE.normal;
 const passesOf = () => (settings.passes === 'inf' ? Infinity : Number(settings.passes));
@@ -1376,6 +1399,10 @@ $('pads').addEventListener('pointerdown', (e) => {
   e.preventDefault();
   onHit(pad.dataset.inst, e.timeStamp, 'pad');
 });
+// フォーカスが Tab で来たか（マウス・タッチで押したボタンにもフォーカスは残るので区別する）
+let tabFocus = false;
+document.addEventListener('keydown', (e) => { if (e.key === 'Tab') tabFocus = true; }, true);
+document.addEventListener('pointerdown', () => { tabFocus = false; }, true);
 document.addEventListener('keydown', (e) => {
   if (e.target.closest && e.target.closest('input, select, textarea')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1385,8 +1412,11 @@ document.addEventListener('keydown', (e) => {
     if (!e.repeat) onHit(inst, e.timeStamp, 'key');
     return;
   }
-  if (e.key === 'Enter' && settings.mode === 'pattern' && !run) { e.preventDefault(); startRun(); }
   if (e.key === 'Escape' && run) { e.preventDefault(); finishRun(); }
+  // Tab で移動してボタンやリンクにフォーカスがあるときの Enter・矢印はそちらに任せる（マウスで押した後は今までどおり）
+  const focused = e.target.closest && e.target.closest('button, a, summary, [role="tab"], [tabindex]');
+  if (focused && tabFocus) return;
+  if (e.key === 'Enter' && settings.mode === 'pattern' && !run) { e.preventDefault(); startRun(); }
   if (e.key === 'ArrowRight' && settings.mode === 'pattern' && !run) stepPattern(1);
   if (e.key === 'ArrowLeft' && settings.mode === 'pattern' && !run) stepPattern(-1);
 });
