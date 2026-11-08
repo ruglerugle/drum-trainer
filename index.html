@@ -34,20 +34,30 @@ body {
   line-height: 1.6;
 }
 header {
-  max-width: 960px; margin: 0 auto; padding: 18px 16px 8px;
+  max-width: 960px; margin: 0 auto; padding: 20px 16px 12px;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: space-between;
 }
-h1 { font-size: 1.5rem; margin: 0; letter-spacing: .05em; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 40px; height: 40px; flex: none; }
+h1 { font-size: 1.5rem; margin: 0; letter-spacing: .05em; line-height: 1.2; }
+.tagline { margin: 0; font-size: .8rem; color: var(--muted); }
 .midi-status {
-  font-size: .85rem; padding: 4px 12px; border-radius: 999px;
+  font-size: .8rem; padding: 3px 12px; border-radius: 999px; max-width: 100%;
   background: #eee6d8; color: var(--muted);
 }
+.midi-status::before { content: "●"; margin-right: 5px; font-size: .7em; vertical-align: .15em; }
 .midi-status.on { background: #dcefe3; color: var(--ok); }
 .midi-status.off { background: #f6dfdc; color: var(--ng); }
+.midi-status details { display: inline; }
+.midi-status summary { display: inline; font-weight: 500; }
+.midi-status summary::after { content: " ▾"; }
+.midi-status details[open] summary::after { content: " ▴"; }
+.midi-status details p { margin: 4px 0 2px; color: var(--ink); line-height: 1.5; }
+.midi-status:has(details[open]) { border-radius: 12px; }
 main { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; display: grid; gap: 16px; }
 main > * { min-width: 0; }
 .card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-.stage { display: grid; gap: 10px; justify-items: center; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; justify-items: center; }
 .stage > * { max-width: 100%; }
 button {
   font: inherit; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff;
@@ -62,24 +72,43 @@ body[data-mode="flash"] .only-pattern, body[data-mode="pattern"] .only-flash { d
 .seg { display: flex; border: 1px solid var(--accent); border-radius: 10px; overflow: hidden; }
 .seg button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--accent); padding: 4px 8px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.stage-bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-.stage-bar button { padding: 3px 12px; font-size: .9rem; background: transparent; color: var(--accent); }
-.stage-bar button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.stage-bar.pats button { min-width: 3em; }
-.stage-bar .done::after { content: " ✓"; }
+.stage-bar {
+  display: flex; gap: 6px; width: 100%; overflow-x: auto; padding: 2px 2px 6px;
+  scrollbar-width: thin; scroll-snap-type: x proximity;
+}
+/* はみ出さないときは中央、はみ出すときは左端から横にスクロール */
+.stage-bar > :first-child { margin-left: auto; }
+.stage-bar > :last-child { margin-right: auto; }
+.stage-bar button {
+  flex: none; padding: 4px 12px; font-size: .88rem; background: transparent; color: var(--accent);
+  border-color: var(--line); border-radius: 999px; white-space: nowrap; scroll-snap-align: center;
+}
+.stage-bar button b { font-weight: 700; margin-right: 4px; opacity: .6; }
+.stage-bar button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.stage-bar button[aria-pressed="true"] b { opacity: .85; }
+.stage-bar.pats { align-items: center; padding-bottom: 2px; }
+.stage-bar.pats .bar-label { flex: none; font-size: .8rem; color: var(--muted); margin-right: 2px; }
+.stage-bar.pats button { width: 2.2em; height: 2.2em; padding: 0; border-radius: 50%; font-weight: 700; }
+.stage-bar.pats button.done { background: #dcefe3; color: var(--ok); border-color: #b9dcc6; }
+.stage-bar.pats button.done[aria-pressed="true"] { background: var(--ok); color: #fff; border-color: var(--ok); }
+.stage-bar .done::after { content: none; }
 .stage-info { font-size: .9rem; color: var(--muted); text-align: center; }
 .stage-info b { color: var(--ink); }
-.score-wrap { position: relative; width: 100%; }
-#score { width: 100%; min-height: 180px; }
+.score-wrap {
+  position: relative; width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  padding: 6px 8px 0;
+}
+#score { width: 100%; min-height: 150px; }
 #score svg { display: block; }
 body[data-mode="flash"] #score { max-width: 280px; margin: 0 auto; min-height: 0; }
 body[data-mode="flash"] #score svg { width: 100%; height: auto; }
-.overlay { position: absolute; inset: 0; pointer-events: none; }
+.overlay { position: absolute; inset: 6px 8px 0; pointer-events: none; }
 .playhead { position: absolute; width: 2px; margin-left: -1px; background: var(--accent); opacity: .7; border-radius: 1px; }
 .extra-mark { position: absolute; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--ng); }
-.count { min-height: 1.6em; font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.status-line { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: center; align-items: center; min-height: 2.1rem; }
+.count { font-size: 1.6rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
 .count small { font-size: .9rem; color: var(--muted); font-weight: 500; }
-.feedback { min-height: 1.8em; font-size: 1.1rem; font-weight: 700; text-align: center; }
+.feedback { font-size: 1.1rem; font-weight: 700; text-align: center; }
 .feedback.ok { color: var(--ok); }
 .feedback.good { color: #b07d00; }
 .feedback.ng { color: var(--ng); }
@@ -98,16 +127,30 @@ body[data-mode="flash"] #score svg { width: 100%; height: auto; }
 .result .sub { color: var(--muted); font-size: .9rem; }
 .legend-dots { display: flex; gap: 12px; justify-content: center; font-size: .8rem; color: var(--muted); }
 .legend-dots i { display: inline-block; width: .8em; height: .8em; border-radius: 50%; vertical-align: -.05em; margin-right: 3px; }
-.pads { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; max-width: 640px; }
-button.pad {
-  padding: 10px 2px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink);
-  font-size: .85rem; line-height: 1.3; display: grid; gap: 2px; justify-items: center;
-  touch-action: manipulation; user-select: none; -webkit-user-select: none; transition: transform .06s;
+/* 叩く人から見たドラムセットの並び：上段＝シンバルとタム、下段＝ハイハット・ペダル・スネア・キック・フロアタム */
+.pads {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px 8px; width: 100%; max-width: 560px;
+  margin-top: 6px; padding: 14px 12px; border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 120%, #efe4d2 0%, transparent 70%);
 }
-button.pad.cym { background: #fbf4dc; }
-button.pad.foot { background: #eef0f4; }
-button.pad kbd { font-family: inherit; font-size: .7rem; color: var(--muted); }
-button.pad.hit { transform: scale(.94); background: var(--accent-soft); border-color: var(--accent); }
+button.pad {
+  aspect-ratio: 1; width: 100%; max-width: 92px; justify-self: center; padding: 0 2px;
+  border-radius: 50%; border: 2px solid #d9cdb9; background: radial-gradient(circle at 50% 40%, #fff 0 55%, #f3ede2 100%);
+  color: var(--ink); font-size: .8rem; line-height: 1.25; font-weight: 700;
+  display: grid; align-content: center; justify-items: center; gap: 1px;
+  box-shadow: 0 2px 0 #d9cdb9; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  transition: transform .06s, box-shadow .12s, background .12s;
+}
+button.pad.cym {
+  border-color: #d8b54f; box-shadow: 0 2px 0 #d8b54f;
+  background: repeating-radial-gradient(circle at 50% 50%, #fbefc6 0 3px, #f6e3a4 3px 6px);
+}
+button.pad.cym.top { transform: translateY(-4px); }
+button.pad.drum { border-color: var(--accent); box-shadow: 0 2px 0 #7d3620; }
+button.pad.foot { border-color: #8f8576; box-shadow: 0 2px 0 #6c6356; background: radial-gradient(circle at 50% 40%, #fff 0 50%, #e8e4dc 100%); }
+button.pad.pedal { aspect-ratio: auto; height: 100%; max-height: 92px; width: 78%; border-radius: 14px 14px 22px 22px; }
+button.pad kbd { font-family: inherit; font-size: .66rem; font-weight: 500; color: var(--muted); }
+button.pad.hit { transform: scale(.92); background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 0 0 6px rgba(164, 73, 43, .18); }
 .kb-note { font-size: .8rem; color: var(--muted); text-align: center; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
 .stat b { display: block; font-size: 1.4rem; }
@@ -130,6 +173,9 @@ select, .field input[type="number"] { font: inherit; padding: 4px 8px; border-ra
 .row input[type="number"] { width: 6em; }
 .check { display: flex; gap: 6px; align-items: center; font-size: .9rem; }
 .checks { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.map-box summary { font-weight: 500; color: var(--muted); font-size: .9rem; }
+.map-box[open] summary { margin-bottom: 6px; }
+.map-box > :not(summary) { margin-top: 6px; }
 .map-table { display: grid; gap: 6px; }
 .map-row { display: grid; grid-template-columns: 11em 1fr auto; gap: 8px; align-items: center; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
 .map-nums { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -141,7 +187,10 @@ footer a { color: var(--accent); }
 @media (max-width: 560px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   h1 { font-size: 1.25rem; }
-  button.pad { font-size: .72rem; padding: 8px 1px; }
+  .pads { gap: 8px 3px; padding: 10px 0; }
+  button.pad { font-size: .62rem; letter-spacing: -.03em; padding: 0; border-width: 1.5px; }
+  button.pad kbd { font-size: .6rem; }
+  .brand svg { width: 32px; height: 32px; }
   .map-row { grid-template-columns: 1fr auto; }
   .map-nums { grid-column: 1 / -1; grid-row: 2; }
 }
@@ -149,7 +198,13 @@ footer a { color: var(--accent); }
 </head>
 <body data-mode="pattern">
 <header>
-  <h1>ドラムトレーナー</h1>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="16" cy="20" rx="12" ry="6" fill="#a4492b"/><rect x="4" y="14" width="24" height="6" fill="#a4492b"/><ellipse cx="16" cy="14" rx="12" ry="5" fill="#f6e4dc" stroke="#a4492b" stroke-width="1.5"/><line x1="9" y1="3" x2="15" y2="13" stroke="#2b2620" stroke-width="2" stroke-linecap="round"/><line x1="25" y1="4" x2="18" y2="13" stroke="#2b2620" stroke-width="2" stroke-linecap="round"/></svg>
+    <div>
+      <h1>ドラムトレーナー</h1>
+      <p class="tagline">ドラム譜を読んで、リズムどおりに叩く練習</p>
+    </div>
+  </div>
   <div id="midiStatus" class="midi-status">MIDIを確認中…</div>
 </header>
 
@@ -171,9 +226,11 @@ footer a { color: var(--accent); }
       <span><i style="background:var(--hint)"></i>Good</span>
       <span><i style="background:var(--ng)"></i>Miss・余分</span>
     </div>
-    <div id="count" class="count only-pattern" aria-live="off"></div>
-    <div id="nameHint" class="name-hint only-flash"></div>
-    <div id="feedback" class="feedback" aria-live="polite"></div>
+    <div class="status-line">
+      <div id="count" class="count only-pattern" aria-live="off"></div>
+      <div id="nameHint" class="name-hint only-flash"></div>
+      <div id="feedback" class="feedback" aria-live="polite"></div>
+    </div>
     <div id="result" class="result only-pattern" aria-live="polite" hidden></div>
     <div class="controls only-pattern">
       <button id="startBtn" type="button">▶ スタート（Enter）</button>
@@ -266,11 +323,14 @@ footer a { color: var(--accent); }
     <div class="field wide">
       <span>MIDIの番号の割り当て</span>
       <small>電子ドラムのパッドが送る番号と楽器の対応です。違う楽器として判定されるときは「叩いて追加」を押してから、そのパッドを叩いてください。</small>
-      <div id="mapTable" class="map-table"></div>
-      <div class="row">
-        <button id="mapResetBtn" class="ghost small" type="button">標準（GM配列）に戻す</button>
-        <span id="midiMonitor" class="monitor"></span>
-      </div>
+      <details class="map-box">
+        <summary>割り当ての一覧を開く</summary>
+        <div id="mapTable" class="map-table"></div>
+        <div class="row">
+          <button id="mapResetBtn" class="ghost small" type="button">標準（GM配列）に戻す</button>
+        </div>
+      </details>
+      <span id="midiMonitor" class="monitor"></span>
     </div>
     <div class="field">
       <span>記録</span>
@@ -301,7 +361,7 @@ const INSTS = [
   { id: 'hp', name: 'ハイハット（ペダル）', pad: 'HH ペダル', key: 'd/4/x2', voice: 'down', kind: 'foot', code: 'KeyN', label: 'N', midi: [44] },
 ];
 const INST = Object.fromEntries(INSTS.map((i) => [i.id, i]));
-const PAD_ORDER = ['cr', 'ho', 't1', 't2', 'rd', 'hh', 'sd', 'bd', 'ft', 'hp'];
+const PAD_ORDER = ['ho', 'cr', 't1', 't2', 'rd', 'hh', 'hp', 'sd', 'bd', 'ft'];
 const CODE_TO_INST = { ...Object.fromEntries(INSTS.map((i) => [i.code, i.id])), KeyF: 'bd' };
 const keyStep = (key) => { const [l, o] = key.split('/'); return Number(o) * 7 + 'cdefgab'.indexOf(l); };
 const defaultMidiMap = () => Object.fromEntries(INSTS.map((i) => [i.id, [...i.midi]]));
@@ -532,9 +592,9 @@ const drawPattern = (p, colorOf) => {
   el.innerHTML = '';
   const w = Math.max(320, Math.floor(el.clientWidth));
   const renderer = new VF.Renderer(el, VF.Renderer.Backends.SVG);
-  renderer.resize(w, 180);
+  renderer.resize(w, 150);
   const ctx = renderer.getContext();
-  const stave = new VF.Stave(4, 40, w - 10).addClef('percussion').addTimeSignature('4/4');
+  const stave = new VF.Stave(4, 24, w - 10).addClef('percussion').addTimeSignature('4/4');
   stave.setContext(ctx).draw();
   const built = ['up', 'down'].map((v) => voiceEvents(p, v).map((ev) => makeNote(ev, v)));
   built.flat().forEach((n) => n.lanes.forEach((l, i) => {
@@ -1015,9 +1075,14 @@ const onMidiMessage = (e) => {
   if (inst) onHit(inst, e.timeStamp || performance.now(), 'midi');
 };
 
-const setMidiStatus = (cls, text) => {
-  $('midiStatus').className = `midi-status ${cls}`;
-  $('midiStatus').textContent = text;
+// help があるときは短い見出しだけ見せ、手順は開いて読む
+const setMidiStatus = (cls, text, help = null) => {
+  const el = $('midiStatus');
+  el.className = `midi-status ${cls}`;
+  if (!help) { el.textContent = text; return; }
+  el.innerHTML = '<details><summary></summary><p></p></details>';
+  el.querySelector('summary').textContent = text;
+  el.querySelector('p').textContent = help;
 };
 
 const initMidi = async () => {
@@ -1031,34 +1096,48 @@ const initMidi = async () => {
       const inputs = [...access.inputs.values()];
       inputs.forEach((i) => { i.onmidimessage = onMidiMessage; });
       if (inputs.length) setMidiStatus('on', `接続中: ${inputs.map((i) => i.name).join('、')}`);
-      else setMidiStatus('off', 'MIDI機器が見つかりません（つなぐと自動で認識します）');
+      else setMidiStatus('off', 'MIDI機器なし', '電子ドラムをUSBでつなぐと自動で認識します。それまでは画面のパッドかPCのキーで叩けます。');
     };
     access.onstatechange = update;
     update();
   } catch (e) {
-    setMidiStatus('off', e.name === 'NotAllowedError'
-      ? 'MIDIが許可されていません。アドレスバー左のアイコン →「サイトの設定」→「MIDI デバイス」を「許可」にして再読み込みしてください'
-      : `MIDIを使えません: ${e.message}`);
+    if (e.name === 'NotAllowedError') {
+      setMidiStatus('off', 'MIDIが許可されていません',
+        'アドレスバー左のアイコン →「サイトの設定」→「MIDI デバイス」を「許可」にして再読み込みしてください。');
+    } else {
+      setMidiStatus('off', 'MIDIを使えません', e.message);
+    }
   }
 };
 
 // ---- 画面の組み立て ----
+// 叩く人から見た並び（上段の端のシンバルは少し高く）
+const PAD_EXTRA = { cr: 'top', rd: 'top', hp: 'pedal' };
+
 const renderPads = () => {
   $('pads').innerHTML = PAD_ORDER.map((id) => {
     const i = INST[id];
-    return `<button type="button" class="pad ${i.kind}" data-inst="${id}" tabindex="-1">${i.pad}<kbd>${i.label}</kbd></button>`;
+    return `<button type="button" class="pad ${i.kind} ${PAD_EXTRA[id] ?? ''}" data-inst="${id}" tabindex="-1"><span>${i.pad.replace(' ', '<br>')}</span><kbd>${i.label}</kbd></button>`;
   }).join('');
+};
+
+const scrollPressedIntoView = (bar) => {
+  const b = bar.querySelector('[aria-pressed="true"]');
+  if (b && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = b.offsetLeft - (bar.clientWidth - b.offsetWidth) / 2;
 };
 
 const renderStageBar = () => {
   $('stageBar').innerHTML = STAGES.map((st, i) =>
-    `<button type="button" data-stage="${i}" aria-pressed="${i === settings.stage}" title="${st.title}">${i + 1} ${st.short}</button>`).join('');
+    `<button type="button" data-stage="${i}" aria-pressed="${i === settings.stage}" title="${st.title}"><b>${i + 1}</b>${st.short}</button>`).join('');
+  scrollPressedIntoView($('stageBar'));
 };
 
 const renderPatternBar = () => {
   const st = STAGES[settings.stage];
-  $('patBar').innerHTML = st.patterns.map((p, i) =>
-    `<button type="button" data-pat="${i}" aria-pressed="${i === settings.pat}" class="${progress.patterns[p.id]?.cleared ? 'done' : ''}" title="${p.name}">${p.id}</button>`).join('');
+  $('patBar').innerHTML = '<span class="bar-label">パターン</span>' + st.patterns.map((p, i) => {
+    const done = progress.patterns[p.id]?.cleared;
+    return `<button type="button" data-pat="${i}" aria-pressed="${i === settings.pat}" class="${done ? 'done' : ''}" title="${p.id}「${p.name}」${done ? '（クリア済み）' : ''}">${i + 1}</button>`;
+  }).join('');
 };
 
 const renderInfo = () => {
@@ -1200,7 +1279,7 @@ $('stageBar').addEventListener('click', (e) => {
   if (b) selectPattern(Number(b.dataset.stage), 0);
 });
 $('patBar').addEventListener('click', (e) => {
-  const b = e.target.closest('button');
+  const b = e.target.closest('button[data-pat]');
   if (b) selectPattern(settings.stage, Number(b.dataset.pat));
 });
 $('startBtn').addEventListener('click', () => startRun());
