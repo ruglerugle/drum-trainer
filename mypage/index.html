@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>練習記録 ― ドラムトレーナー</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='20' rx='12' ry='6' fill='%23a4492b'/%3E%3Crect x='4' y='14' width='24' height='6' fill='%23a4492b'/%3E%3Cellipse cx='16' cy='14' rx='12' ry='5' fill='%23f6e4dc' stroke='%23a4492b' stroke-width='1.5'/%3E%3Cline x1='9' y1='3' x2='15' y2='13' stroke='%232b2620' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='25' y1='4' x2='18' y2='13' stroke='%232b2620' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4efe6; --paper: #fffdf8; --ink: #2b2620; --muted: #7a6f62; --line: #e2d9ca;
+  --accent: #a4492b; --accent-soft: #f6e4dc; --ok: #2e8b57; --ng: #c8433a; --gold: #c98a00; --hint: #d9a21b;
+  /* 練習時間の濃さ（赤茶ひと色の明るい→暗い） */
+  --heat0: #ebe4d6; --heat1: #efcdbd; --heat2: #dc9b80; --heat3: #c06a49; --heat4: #8e3a1f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif; line-height: 1.6; }
+header, main, footer { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 18px; padding-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+h1 { font-size: 1.4rem; margin: 0; letter-spacing: .04em; }
+h1 small { font-size: .9rem; color: var(--muted); font-weight: 500; margin-left: 6px; }
+a { color: var(--accent); }
+.back { font-weight: 700; text-decoration: none; border: 1px solid var(--accent); border-radius: 999px; padding: 3px 14px; background: var(--paper); }
+main { display: grid; gap: 14px; padding-bottom: 32px; }
+main > * { min-width: 0; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.card h2 { font-size: 1.05rem; margin: 0 0 10px; }
+.muted { color: var(--muted); font-size: .9rem; }
+.note { color: var(--muted); font-size: .8rem; margin: 8px 0 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+.tile { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.tile .v { font-size: 1.8rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tile .v small { font-size: .9rem; color: var(--muted); font-weight: 500; margin-left: 2px; }
+.tile .k { font-size: .82rem; color: var(--muted); }
+/* 練習カレンダー：列が週、行が曜日 */
+.cal-wrap { overflow-x: auto; }
+.cal { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 14px); grid-auto-columns: 14px; gap: 3px; width: max-content; }
+.cal i { display: block; width: 14px; height: 14px; border-radius: 3px; background: var(--heat0); }
+.cal i[data-l="1"] { background: var(--heat1); } .cal i[data-l="2"] { background: var(--heat2); }
+.cal i[data-l="3"] { background: var(--heat3); } .cal i[data-l="4"] { background: var(--heat4); }
+.cal i.today { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cal i.future { visibility: hidden; }
+.scale { display: flex; gap: 3px; align-items: center; font-size: .78rem; color: var(--muted); margin-top: 6px; flex-wrap: wrap; }
+.scale i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+/* 30日の練習時間 */
+.bars { position: relative; display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; align-items: end; height: 140px; border-bottom: 1px solid var(--line); }
+.bars .b { position: relative; height: 100%; display: flex; align-items: flex-end; }
+.bars .b span { display: block; width: 100%; background: var(--heat3); border-radius: 4px 4px 0 0; }
+.bars .b:hover span { filter: brightness(1.15); }
+.axis { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); margin-top: 2px; }
+/* タイミング：0ms の線から上が遅い・下が早い。点が平均、縦棒がばらつき */
+.timing { position: relative; display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; height: 160px; }
+.timing .zero { position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--muted); pointer-events: none; }
+.timing .zero em { position: absolute; left: 0; top: -1.3em; font-style: normal; font-size: .72rem; color: var(--muted); }
+.timing .lab { position: absolute; right: 0; font-size: .72rem; color: var(--muted); pointer-events: none; }
+.timing .d { position: relative; height: 100%; }
+.timing .d .sd { position: absolute; left: 50%; width: 4px; margin-left: -2px; background: var(--heat1); border-radius: 2px; }
+.timing .d .m { position: absolute; left: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--accent); }
+.tip { position: fixed; z-index: 10; pointer-events: none; background: var(--ink); color: #fff; font-size: .8rem; padding: 3px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -120%); }
+.tip[hidden] { display: none; }
+/* パターン：ステージごとに丸いチップ */
+.stage-row { display: grid; grid-template-columns: 11em 1fr; gap: 4px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.stage-row:last-child { border-bottom: 0; }
+.stage-row .name { font-weight: 700; font-size: .9rem; }
+.stage-row .name small { display: block; font-weight: 500; color: var(--muted); font-size: .78rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { min-width: 3.4em; text-align: center; border-radius: 999px; padding: 1px 8px; font-size: .78rem; border: 1px solid var(--line); color: var(--muted); background: #fff; line-height: 1.5; }
+.chip b { display: block; font-size: .72rem; font-weight: 500; }
+.chip.done { background: #dcefe3; border-color: #b9dcc6; color: var(--ok); }
+.chip.tried { background: #fbf0d4; border-color: #ecd6a0; color: #8a6200; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .78rem; color: var(--muted); margin-top: 8px; }
+.legend span::before { content: ""; display: inline-block; width: .9em; height: .9em; border-radius: 50%; margin-right: 4px; vertical-align: -.1em; border: 1px solid var(--line); background: #fff; }
+.legend .l-done::before { background: #dcefe3; border-color: #b9dcc6; }
+.legend .l-tried::before { background: #fbf0d4; border-color: #ecd6a0; }
+/* 曲 */
+.songs { display: grid; gap: 6px; }
+.song summary { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; cursor: pointer; padding: 4px 0; }
+.song summary .t { font-weight: 700; }
+.song summary .g { margin-left: auto; font-size: .85rem; color: var(--muted); }
+.st { color: var(--gold); letter-spacing: .03em; white-space: nowrap; }
+.meter { width: 100%; height: 6px; background: var(--heat0); border-radius: 999px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
+.song ul { margin: 6px 0 8px; padding-left: 0; list-style: none; font-size: .85rem; columns: 2 260px; }
+.song li { break-inside: avoid; }
+.song li.ok { color: var(--ok); }
+.weak { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; font-size: .9rem; }
+.weak div { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; border-bottom: 1px dotted var(--line); padding-bottom: 4px; }
+.weak .meter { grid-column: 1 / -1; height: 5px; }
+.weak .meter i { background: var(--ng); }
+.weak b { color: var(--ng); }
+h3 { font-size: .92rem; margin: 12px 0 6px; color: var(--muted); }
+h3:first-of-type { margin-top: 0; }
+footer { padding-bottom: 28px; text-align: center; font-size: .8rem; color: var(--muted); }
+@media (max-width: 560px) {
+  .stage-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>練習記録<small>ドラムトレーナー</small></h1>
+  <a class="back" href="../">← 練習にもどる</a>
+</header>
+
+<main>
+  <div id="tiles" class="tiles" aria-label="まとめ"></div>
+
+  <section class="card">
+    <h2>練習カレンダー（最近15週）</h2>
+    <div class="cal-wrap"><div id="cal" class="cal" role="img" aria-label="日ごとの練習時間"></div></div>
+    <div class="scale" aria-hidden="true">叩いていない <i style="background:var(--heat0)"></i><i style="background:var(--heat1)"></i><i style="background:var(--heat2)"></i><i style="background:var(--heat3)"></i><i style="background:var(--heat4)"></i> 30分以上</div>
+  </section>
+
+  <section class="card">
+    <h2>練習時間（最近30日・分）</h2>
+    <div id="bars" class="bars" role="img" aria-label="最近30日の練習時間"></div>
+    <div id="barsAxis" class="axis"></div>
+  </section>
+
+  <section class="card">
+    <h2>タイミングのずれ（最近30日）</h2>
+    <div id="timing" class="timing" role="img" aria-label="日ごとの平均のずれとばらつき"></div>
+    <div id="timingAxis" class="axis"></div>
+    <p class="note">点がその日の平均のずれ（0ms の線より上は遅め、下は早め）、縦の棒がばらつきです。棒が短いほど、毎回同じタイミングで叩けています。</p>
+  </section>
+
+  <section class="card">
+    <h2>パターンのクリア</h2>
+    <div id="patterns"></div>
+    <div class="legend"><span class="l-done">クリア（最速のBPM）</span><span class="l-tried">挑戦中（最高のヒット率）</span><span>まだ叩いていない</span></div>
+  </section>
+
+  <section class="card">
+    <h2>曲の★</h2>
+    <div id="songs" class="songs"></div>
+    <p class="note">★は通しのテンポで決まります。60%でクリア→★1、80%→★2、100%→★3。</p>
+  </section>
+
+  <section class="card">
+    <h2>苦手な楽器</h2>
+    <div id="weak"></div>
+  </section>
+</main>
+
+<footer>
+  記録はこの端末のブラウザに保存されています。ほかの端末やブラウザの記録とは別々です。
+</footer>
+<div id="tip" class="tip" hidden></div>
+
+<script src="../data.js?v=1"></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// 練習画面と同じ localStorage を読む（書き換えはしない）
+const readRecord = () => {
+  try {
+    const raw = localStorage.getItem('drumTrainer_v1');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.warn('記録を読み込めませんでした', e);
+    return {};
+  }
+};
+const progress = { patterns: {}, insts: {}, bars: 0, flash: {}, songs: {}, daily: {}, ...(readRecord().progress || {}) };
+const daily = progress.daily || {};
+
+// ---- ツールチップ ----
+const tip = $('tip');
+const bindTip = (root) => {
+  root.addEventListener('pointerover', (e) => {
+    const t = e.target instanceof Element ? e.target.closest('[data-tip]') : null;
+    if (!t) return;
+    const r = t.getBoundingClientRect();
+    tip.textContent = t.dataset.tip;
+    tip.style.left = `${r.left + r.width / 2}px`;
+    tip.style.top = `${r.top}px`;
+    tip.hidden = false;
+  });
+  root.addEventListener('pointerout', () => { tip.hidden = true; });
+};
+
+const minutes = (sec) => Math.floor(sec / 60);
+const dateLabel = (k) => { const [, m, d] = k.split('-'); return `${Number(m)}/${Number(d)}`; };
+const level = (sec) => (sec < 30 ? 0 : sec < 300 ? 1 : sec < 900 ? 2 : sec < 1800 ? 3 : 4);
+const secOf = (k) => daily[k]?.sec || 0;
+const lastDays = (n) => Array.from({ length: n }, (_, i) => {
+  const x = new Date();
+  x.setDate(x.getDate() - (n - 1 - i));
+  return dayKey(x);
+});
+const signed = (ms) => `${ms >= 0 ? '+' : '−'}${Math.abs(Math.round(ms))}ms`;
+const allPatterns = STAGES.flatMap((s) => s.patterns);
+
+const renderTiles = () => {
+  const total = Object.values(daily).reduce((a, d) => a + (d.sec || 0), 0);
+  const week = lastDays(7).reduce((a, k) => a + secOf(k), 0);
+  const cleared = allPatterns.filter((p) => progress.patterns[p.id]?.cleared).length;
+  const stars = SONGS.reduce((a, s) => a + songStars(s, progress.songs[s.id]), 0);
+  const tile = (v, unit, k) => `<div class="tile"><div class="v">${v}<small>${unit}</small></div><div class="k">${k}</div></div>`;
+  $('tiles').innerHTML =
+    tile(streakDays(daily), '日', '連続で練習') +
+    tile(minutes(secOf(dayKey())), '分', '今日の練習') +
+    tile(minutes(week), '分', '最近7日の練習') +
+    tile((total / 3600).toFixed(1), '時間', '合計の練習時間') +
+    tile(cleared, `/ ${allPatterns.length}`, 'クリアしたパターン') +
+    tile(stars, `/ ${SONGS.length * 3}`, '曲の★');
+};
+
+const renderCalendar = () => {
+  const today = new Date();
+  // 今週の土曜まで、15週ぶん（日曜はじまり）
+  const end = new Date(today);
+  end.setDate(end.getDate() + (6 - end.getDay()));
+  const start = new Date(end);
+  start.setDate(start.getDate() - 15 * 7 + 1);
+  const cells = [];
+  for (const x = new Date(start); x <= end; x.setDate(x.getDate() + 1)) {
+    const k = dayKey(x);
+    const cls = [x > today ? 'future' : '', k === dayKey(today) ? 'today' : ''].filter(Boolean).join(' ');
+    cells.push(`<i class="${cls}" data-l="${level(secOf(k))}" data-tip="${dateLabel(k)}　${minutes(secOf(k))}分"></i>`);
+  }
+  $('cal').innerHTML = cells.join('');
+};
+
+const renderBars = () => {
+  const days = lastDays(30);
+  const secs = days.map(secOf);
+  const top = Math.max(600, ...secs);
+  $('bars').innerHTML = days.map((k, i) =>
+    `<div class="b" data-tip="${dateLabel(k)}　${minutes(secs[i])}分${daily[k]?.bars ? `・${daily[k].bars}小節` : ''}"><span style="height:${(secs[i] / top) * 100}%"></span></div>`).join('');
+  $('barsAxis').innerHTML = `<span>${dateLabel(days[0])}</span><span>${dateLabel(days[15])}</span><span>今日</span>`;
+};
+
+const renderTiming = () => {
+  const days = lastDays(30);
+  const stats = days.map((k) => {
+    const d = daily[k];
+    if (!d || d.offN < 4) return null;
+    const mean = d.offSum / d.offN;
+    return { mean, sd: Math.sqrt(Math.max(0, d.offSq / d.offN - mean * mean)), n: d.offN };
+  });
+  const range = Math.max(40, ...stats.filter(Boolean).map((s) => Math.abs(s.mean) + s.sd));
+  const y = (ms) => 50 - (ms / range) * 50; // 上が遅い（＋）
+  $('timing').innerHTML = '<div class="zero"><em>0ms</em></div>'
+    + `<span class="lab" style="top:0">遅い +${Math.round(range)}ms</span><span class="lab" style="bottom:0">早い −${Math.round(range)}ms</span>`
+    + days.map((k, i) => {
+      const s = stats[i];
+      if (!s) return '<div class="d"></div>';
+      const tipText = `${dateLabel(k)}　平均 ${signed(s.mean)}・ばらつき ±${Math.round(s.sd)}ms（${s.n}打）`;
+      return `<div class="d" data-tip="${tipText}"><span class="sd" style="top:${y(s.mean + s.sd)}%;height:${(s.sd / range) * 100}%"></span><span class="m" style="top:${y(s.mean)}%"></span></div>`;
+    }).join('');
+  $('timingAxis').innerHTML = `<span>${dateLabel(days[0])}</span><span>${dateLabel(days[15])}</span><span>今日</span>`;
+};
+
+const renderPatterns = () => {
+  $('patterns').innerHTML = STAGES.map((st, si) => {
+    const done = st.patterns.filter((p) => progress.patterns[p.id]?.cleared).length;
+    const chips = st.patterns.map((p) => {
+      const r = progress.patterns[p.id];
+      const cls = r?.cleared ? 'done' : r ? 'tried' : '';
+      const sub = r?.cleared ? `BPM ${r.clearBpm}` : r ? `${Math.round(r.best * 100)}%` : '–';
+      return `<span class="chip ${cls}" title="${esc(`${p.id}「${p.name}」`)}">${p.id}<b>${sub}</b></span>`;
+    }).join('');
+    return `<div class="stage-row"><div class="name">${si + 1}. ${esc(st.title)}<small>クリア ${done} / ${st.patterns.length}</small></div><div class="chips">${chips}</div></div>`;
+  }).join('');
+};
+
+const renderSongs = () => {
+  $('songs').innerHTML = SONGS.map((s) => {
+    const rec = progress.songs[s.id];
+    const n = songStars(s, rec);
+    const doneSteps = s.steps.filter((st) => rec?.steps?.[st.key]?.cleared).length;
+    const items = s.steps.map((st) => {
+      const r = rec?.steps?.[st.key];
+      const res = r ? (r.cleared ? '✓ クリア' : `最高 ${Math.round(r.best * 100)}%`) : '';
+      return `<li class="${r?.cleared ? 'ok' : ''}">${esc(st.label)}　<span class="muted">BPM ${stepBpm(s, st)}</span>${res ? `　${res}` : ''}</li>`;
+    }).join('');
+    return `<details class="song"><summary><span class="t">${esc(s.title)}</span><span class="muted">${s.title.includes(s.genre) ? "" : `${esc(s.genre)}・`}BPM ${s.tempo}${s.swing ? "・はねる" : ""}</span>`
+      + `<span class="g"><span class="st">${starText(n)}</span>　段階 ${doneSteps} / ${s.steps.length}</span>`
+      + `<span class="meter"><i style="width:${(doneSteps / s.steps.length) * 100}%"></i></span></summary><ul>${items}</ul></details>`;
+  }).join('');
+};
+
+const renderWeak = () => {
+  const row = (name, rate, extra) => `<div><span>${esc(name)}</span><span><b>${Math.round(rate * 100)}%</b> <span class="muted">${extra}</span></span><span class="meter"><i style="width:${rate * 100}%"></i></span></div>`;
+  const play = INSTS.map((i) => ({ i, s: progress.insts[i.id] })).filter(({ s }) => s && s.n >= 8)
+    .map(({ i, s }) => ({ i, rate: s.miss / s.n, n: s.n })).sort((a, b) => b.rate - a.rate);
+  const flash = INSTS.map((i) => ({ i, s: progress.flash[i.id] })).filter(({ s }) => s && s.n >= 3)
+    .map(({ i, s }) => ({ i, rate: 1 - s.first / s.n, n: s.n })).sort((a, b) => b.rate - a.rate);
+  $('weak').innerHTML =
+    '<h3>叩いたときのミス（パターン・曲）</h3>'
+    + (play.length ? `<div class="weak">${play.map(({ i, rate, n }) => row(i.name, rate, `ミス / ${n}打`)).join('')}</div>` : '<p class="muted">まだ記録が少ないです（8打以上叩いた楽器から出します）。</p>')
+    + '<h3>楽器フラッシュでまちがえた割合</h3>'
+    + (flash.length ? `<div class="weak">${flash.map(({ i, rate, n }) => row(i.name, rate, `/ ${n}問`)).join('')}</div>` : '<p class="muted">まだ記録が少ないです（3問以上出た楽器から出します）。</p>');
+};
+
+bindTip($('cal'));
+bindTip($('bars'));
+bindTip($('timing'));
+renderTiles();
+renderCalendar();
+renderBars();
+renderTiming();
+renderPatterns();
+renderSongs();
+renderWeak();
+</script>
+</body>
+</html>

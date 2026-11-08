@@ -14,6 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+<script src="data.js?v=1"></script>
 <style>
 :root {
   --bg: #f4efe6;
@@ -67,8 +68,19 @@ button.ghost { background: transparent; color: var(--accent); }
 button.small { padding: 2px 10px; font-size: .85rem; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--hint); outline-offset: 2px; }
 [hidden] { display: none !important; }
-body[data-mode="flash"] .only-pattern, body[data-mode="pattern"] .only-flash { display: none !important; }
-.mode-seg { width: 100%; max-width: 420px; }
+/* only-play = パターンと曲（叩いて判定する画面）、only-pattern / only-song / only-flash = そのモードだけ */
+body:not([data-mode="pattern"]) .only-pattern, body:not([data-mode="song"]) .only-song,
+body:not([data-mode="flash"]) .only-flash, body[data-mode="flash"] .only-play { display: none !important; }
+.head-right { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: flex-end; }
+.rec-link { font-size: .85rem; font-weight: 700; color: var(--accent); text-decoration: none; border: 1px solid var(--accent); border-radius: 999px; padding: 2px 12px; background: var(--paper); }
+.stage-bar button .stars { color: #c98a00; margin-left: 4px; font-size: .8em; letter-spacing: -.05em; }
+.stage-bar button[aria-pressed="true"] .stars { color: #ffe08a; }
+.stage-bar.steps { align-items: center; padding-bottom: 2px; }
+.stage-bar.steps button { padding: 2px 10px; font-size: .8rem; }
+.stage-bar.steps button.done { background: #dcefe3; color: var(--ok); border-color: #b9dcc6; }
+.stage-bar.steps button.done[aria-pressed="true"] { background: var(--ok); color: #fff; border-color: var(--ok); }
+.mode-seg { width: 100%; max-width: 460px; }
+.mode-seg button { white-space: nowrap; }
 .seg { display: flex; border: 1px solid var(--accent); border-radius: 10px; overflow: hidden; }
 .seg button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--accent); padding: 4px 8px; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
@@ -191,6 +203,7 @@ footer a { color: var(--accent); }
   button.pad { font-size: .62rem; letter-spacing: -.03em; padding: 0; border-width: 1.5px; }
   button.pad kbd { font-size: .6rem; }
   .brand svg { width: 32px; height: 32px; }
+  .mode-seg button { font-size: .82rem; padding: 4px 2px; }
   .map-row { grid-template-columns: 1fr auto; }
   .map-nums { grid-column: 1 / -1; grid-row: 2; }
 }
@@ -205,34 +218,40 @@ footer a { color: var(--accent); }
       <p class="tagline">ドラム譜を読んで、リズムどおりに叩く練習</p>
     </div>
   </div>
-  <div id="midiStatus" class="midi-status">MIDIを確認中…</div>
+  <div class="head-right">
+    <div id="midiStatus" class="midi-status">MIDIを確認中…</div>
+    <a class="rec-link" href="mypage/">練習記録 →</a>
+  </div>
 </header>
 
 <main>
   <section class="card stage" aria-label="練習">
     <div class="seg mode-seg" id="modeSeg" role="group" aria-label="モード">
       <button type="button" data-v="pattern">パターン読譜</button>
+      <button type="button" data-v="song">曲</button>
       <button type="button" data-v="flash">楽器フラッシュ</button>
     </div>
     <div id="stageBar" class="stage-bar only-pattern" role="group" aria-label="ステージ"></div>
     <div id="patBar" class="stage-bar pats only-pattern" role="group" aria-label="パターン"></div>
+    <div id="songBar" class="stage-bar only-song" role="group" aria-label="曲"></div>
+    <div id="stepBar" class="stage-bar steps only-song" role="group" aria-label="練習の段階"></div>
     <div id="stageInfo" class="stage-info" aria-live="polite"></div>
     <div class="score-wrap">
       <div id="score" role="img" aria-label="ドラム譜"></div>
-      <div class="overlay only-pattern"><div id="playhead" class="playhead" hidden></div><div id="marks"></div></div>
+      <div class="overlay only-play"><div id="playhead" class="playhead" hidden></div><div id="marks"></div></div>
     </div>
-    <div class="legend-dots only-pattern" aria-hidden="true">
+    <div class="legend-dots only-play" aria-hidden="true">
       <span><i style="background:var(--ok)"></i>Perfect</span>
       <span><i style="background:var(--hint)"></i>Good</span>
       <span><i style="background:var(--ng)"></i>Miss・余分</span>
     </div>
     <div class="status-line">
-      <div id="count" class="count only-pattern" aria-live="off"></div>
+      <div id="count" class="count only-play" aria-live="off"></div>
       <div id="nameHint" class="name-hint only-flash"></div>
       <div id="feedback" class="feedback" aria-live="polite"></div>
     </div>
-    <div id="result" class="result only-pattern" aria-live="polite" hidden></div>
-    <div class="controls only-pattern">
+    <div id="result" class="result only-play" aria-live="polite" hidden></div>
+    <div class="controls only-play">
       <button id="startBtn" type="button">▶ スタート（Enter）</button>
       <button id="stopBtn" type="button" hidden>■ ストップ（Esc）</button>
       <button id="demoBtn" class="ghost" type="button">♪ お手本を聞く</button>
@@ -247,6 +266,10 @@ footer a { color: var(--accent); }
       <button id="prevBtn" class="ghost small" type="button">← 前のパターン</button>
       <button id="weakBtn" class="ghost small" type="button">苦手なパターンを練習</button>
       <button id="nextBtn" class="ghost small" type="button">次のパターン →</button>
+    </div>
+    <div class="controls only-song">
+      <button id="prevStepBtn" class="ghost small" type="button">← 前の段階</button>
+      <button id="nextStepBtn" class="ghost small" type="button">次の段階 →</button>
     </div>
     <div class="controls only-flash">
       <button id="skipBtn" class="ghost" type="button">答えを見て次へ</button>
@@ -279,7 +302,7 @@ footer a { color: var(--accent); }
         <option value="inf">止めるまで続ける</option>
       </select>
     </label>
-    <label class="field only-pattern">
+    <label class="field only-play">
       <span>メトロノーム</span>
       <select id="metroSel">
         <option value="4">4分音符ごと</option>
@@ -287,7 +310,7 @@ footer a { color: var(--accent); }
         <option value="off">はじめのカウントだけ</option>
       </select>
     </label>
-    <div class="field only-pattern">
+    <div class="field only-play">
       <span>判定の厳しさ（Perfect / Good の幅）</span>
       <div class="seg" id="judgeSeg">
         <button type="button" data-v="easy">やさしい</button>
@@ -346,101 +369,6 @@ footer a { color: var(--accent); }
 const VF = Vex.Flow;
 const $ = (id) => document.getElementById(id);
 
-// ---- 楽器 ----
-// key: 打楽器譜での位置。voice: up = 手（符尾が上）/ down = 足（符尾が下）
-const INSTS = [
-  { id: 'cr', name: 'クラッシュ', pad: 'クラッシュ', key: 'a/5/x2', voice: 'up', kind: 'cym', code: 'KeyY', label: 'Y', midi: [49, 57, 55, 52] },
-  { id: 'ho', name: 'ハイハット（オープン）', pad: 'HH オープン', key: 'g/5/x2', open: true, voice: 'up', kind: 'cym', code: 'KeyI', label: 'I', midi: [46, 26] },
-  { id: 'hh', name: 'ハイハット（クローズ）', pad: 'HH クローズ', key: 'g/5/x2', voice: 'up', kind: 'cym', code: 'KeyK', label: 'K', midi: [42, 22] },
-  { id: 'rd', name: 'ライド', pad: 'ライド', key: 'f/5/x2', voice: 'up', kind: 'cym', code: 'KeyP', label: 'P', midi: [51, 59, 53] },
-  { id: 't1', name: 'タム1（ハイタム）', pad: 'タム1', key: 'e/5', voice: 'up', kind: 'drum', code: 'KeyU', label: 'U', midi: [48, 50] },
-  { id: 't2', name: 'タム2（ロータム）', pad: 'タム2', key: 'd/5', voice: 'up', kind: 'drum', code: 'KeyO', label: 'O', midi: [45, 47] },
-  { id: 'sd', name: 'スネア', pad: 'スネア', key: 'c/5', voice: 'up', kind: 'drum', code: 'KeyJ', label: 'J', midi: [38, 40, 37] },
-  { id: 'ft', name: 'フロアタム', pad: 'フロアタム', key: 'a/4', voice: 'up', kind: 'drum', code: 'KeyL', label: 'L', midi: [43, 41, 58] },
-  { id: 'bd', name: 'キック（バスドラム）', pad: 'キック', key: 'f/4', voice: 'down', kind: 'foot', code: 'Space', label: 'Space', midi: [36, 35] },
-  { id: 'hp', name: 'ハイハット（ペダル）', pad: 'HH ペダル', key: 'd/4/x2', voice: 'down', kind: 'foot', code: 'KeyN', label: 'N', midi: [44] },
-];
-const INST = Object.fromEntries(INSTS.map((i) => [i.id, i]));
-const PAD_ORDER = ['ho', 'cr', 't1', 't2', 'rd', 'hh', 'hp', 'sd', 'bd', 'ft'];
-const CODE_TO_INST = { ...Object.fromEntries(INSTS.map((i) => [i.code, i.id])), KeyF: 'bd' };
-const keyStep = (key) => { const [l, o] = key.split('/'); return Number(o) * 7 + 'cdefgab'.indexOf(l); };
-const defaultMidiMap = () => Object.fromEntries(INSTS.map((i) => [i.id, [...i.midi]]));
-
-// ---- パターン（1小節 = 16分音符16個、x = 叩く）----
-const HH8 = 'x.x.x.x.x.x.x.x.';
-const SD24 = '....x.......x...';
-const HH16 = 'xxxx.xxxxxxx.xxx';
-const STAGES = [
-  { short: '4分', title: '4分音符のビート', desc: '1拍に1つずつ。拍に合わせて叩くことに慣れましょう。', patterns: [
-    { name: 'キックだけ', bd: 'x...x...x...x...' },
-    { name: 'キックとスネア', sd: SD24, bd: 'x.......x.......' },
-    { name: 'ハイハットを足す', hh: 'x...x...x...x...', sd: SD24, bd: 'x.......x.......' },
-    { name: 'キックを3つ', hh: 'x...x...x...x...', sd: SD24, bd: 'x...x...x.......' },
-    { name: '休符のある小節', hh: 'x...x...x.......', sd: '....x...........', bd: 'x.......x.......' },
-    { name: 'クラッシュとライド', cr: 'x...............', rd: '....x...x...x...', sd: SD24, bd: 'x.......x.......' },
-  ] },
-  { short: '8ビート', title: '8ビート', desc: 'ハイハットを8分音符で刻む、いちばん基本のリズム。キックの位置が少しずつ変わります。', patterns: [
-    { name: '基本の8ビート', hh: HH8, sd: SD24, bd: 'x.......x.......' },
-    { name: '3拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.......x.x.....' },
-    { name: '1拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.x.....x.......' },
-    { name: '2拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.....x.x.......' },
-    { name: '4拍目のウラにキック', hh: HH8, sd: SD24, bd: 'x.......x.....x.' },
-    { name: 'キックを4つ', hh: HH8, sd: SD24, bd: 'x.x.....x.x.....' },
-    { name: 'ライドで刻む', rd: HH8, sd: SD24, bd: 'x.....x.x.......' },
-  ] },
-  { short: 'シンバル', title: 'シンバルとオープンハイハット', desc: '記号の違いを読み分けます。○の付いたハイハットは、足をゆるめて開いた音です。', patterns: [
-    { name: '4拍目のウラでオープン', hh: 'x.x.x.x.x.x.x...', ho: '..............x.', sd: SD24, bd: 'x.......x.......' },
-    { name: '2拍目のウラでオープン', hh: 'x.x.x...x.x.x.x.', ho: '......x.........', sd: SD24, bd: 'x.......x.x.....' },
-    { name: '1拍目にクラッシュ', cr: 'x...............', hh: '..x.x.x.x.x.x.x.', sd: SD24, bd: 'x.......x.......' },
-    { name: 'ライドとペダル', rd: HH8, sd: SD24, bd: 'x.......x.......', hp: '....x.......x...' },
-    { name: 'ウラでペダル', rd: 'x...x...x...x...', sd: SD24, bd: 'x.......x.......', hp: '..x...x...x...x.' },
-    { name: 'スネアを続けて', hh: HH8, sd: '....x.......x.x.', bd: 'x.......x.x.....' },
-  ] },
-  { short: '16分HH', title: '16分のハイハット', desc: 'ハイハットを16分音符で。両手で交互に刻み、スネアを叩く所だけハイハットを休みます。', patterns: [
-    { name: '16分の基本', hh: HH16, sd: SD24, bd: 'x.......x.......' },
-    { name: '3拍目のウラにキック', hh: HH16, sd: SD24, bd: 'x.......x.x.....' },
-    { name: 'キックを4つ', hh: HH16, sd: SD24, bd: 'x.x.....x.x.....' },
-    { name: '2拍目のウラにキック', hh: HH16, sd: SD24, bd: 'x.....x.x.......' },
-    { name: '最後にオープン', hh: 'xxxx.xxxxxxx.x..', ho: '..............x.', sd: SD24, bd: 'x.......x.......' },
-  ] },
-  { short: '16分キック', title: '16分のキック', desc: 'ハイハットは8分のまま、キックが16分音符の位置に入ります。', patterns: [
-    { name: '2拍目の最後', hh: HH8, sd: SD24, bd: 'x......xx.......' },
-    { name: '1拍目の最後', hh: HH8, sd: SD24, bd: 'x..x....x.......' },
-    { name: '3拍目の最後', hh: HH8, sd: SD24, bd: 'x.......x..x....' },
-    { name: 'ウラと16分', hh: HH8, sd: SD24, bd: 'x.x....xx.......' },
-    { name: '1拍目に2つ', hh: HH8, sd: SD24, bd: 'x..x..x.x.......' },
-    { name: '16分を2か所', hh: HH8, sd: SD24, bd: 'x......xx..x....' },
-  ] },
-  { short: '16分スネア', title: '16分のスネア', desc: 'スネアが拍のウラや16分音符の位置に入るリズム。', patterns: [
-    { name: '2拍目の最後にスネア', hh: HH8, sd: '....x..x....x...', bd: 'x.......x.x.....' },
-    { name: '小節の最後にスネア', hh: HH8, sd: '....x.......x..x', bd: 'x.......x.x.....' },
-    { name: 'スネアを3つ', hh: HH8, sd: '....x..x.x..x...', bd: 'x.......x.......' },
-    { name: 'ハーフタイム', hh: HH8, sd: '........x.......', bd: 'x......x..x.....' },
-    { name: 'すき間を埋める', hh: HH8, sd: '....x..x.x..x..x', bd: 'x.x.....x.x.....' },
-  ] },
-  { short: 'フィル', title: 'フィルイン', desc: '最後の拍やまる1小節で、スネアやタムを回します。', patterns: [
-    { name: '4拍目にスネア16分', hh: 'x.x.x.x.x.x.....', sd: '....x.......xxxx', bd: 'x.......x.......' },
-    { name: '4拍目でタムを回す', hh: 'x.x.x.x.x.x.....', sd: '....x.......x...', t1: '.............x..', t2: '..............x.', ft: '...............x', bd: 'x.......x.......' },
-    { name: '8分で1周', sd: 'x.x.............', t1: '....x.x.........', t2: '........x.x.....', ft: '............x.x.', bd: 'x...x...x...x...' },
-    { name: '16分で1周', sd: 'xxxx............', t1: '....xxxx........', t2: '........xxxx....', ft: '............xxxx', bd: 'x...x...x...x...' },
-    { name: '後半でフィル', hh: 'x.x.x.x.........', sd: '....x...xxxx....', t2: '............xx..', ft: '..............xx', bd: 'x.......x.......' },
-    { name: '手・手・足', sd: 'xx..xx..xx..xx..', bd: '..x...x...x...x.' },
-  ] },
-  { short: 'ウラ拍', title: 'ウラ拍とシンコペーション', desc: '拍の頭ではない所に大事な音がくるリズム。', patterns: [
-    { name: 'ウラでオープン', hh: 'x...x...x...x...', ho: '..x...x...x...x.', sd: SD24, bd: 'x...x...x...x...' },
-    { name: 'ウラだけハイハット', hh: '..x...x...x...x.', sd: SD24, bd: 'x...x...x...x...' },
-    { name: 'ウラでクラッシュ', cr: '......x.........', hh: 'x.x.x...x.x.x.x.', sd: SD24, bd: 'x.....x.........' },
-    { name: 'キメ', cr: 'x.....x.....x...', sd: '..............x.', bd: 'x.....x.....x...' },
-    { name: 'ウラのキック', hh: HH8, sd: SD24, bd: 'x.....x.......x.' },
-  ] },
-];
-STAGES.forEach((st, si) => st.patterns.forEach((p, pi) => {
-  p.id = `${si + 1}-${pi + 1}`;
-  Object.keys(p).filter((k) => INST[k]).forEach((k) => {
-    if (!/^[x.]{16}$/.test(p[k])) throw new Error(`パターン ${p.id} の ${k} が16文字の x/. ではありません: ${p[k]}`);
-  });
-}));
-const lanesOf = (p) => INSTS.map((i) => i.id).filter((id) => p[id]);
 const CALIB_PATTERN = { id: 'calib', name: '補正の測定', sd: 'x...x...x...x...' };
 const CALIB_WIN = { perfect: 40, good: 160 };
 const JUDGE = { easy: { perfect: 50, good: 100 }, normal: { perfect: 30, good: 70 }, hard: { perfect: 20, good: 45 } };
@@ -449,7 +377,7 @@ const CLEAR_RATE = 0.9;
 // ---- 設定と記録 ----
 const STORE_KEY = 'drumTrainer_v1';
 const DEFAULT_SETTINGS = {
-  mode: 'pattern', stage: 0, pat: 0, bpm: 80, passes: '2', metro: '4', judge: 'normal', latency: 0,
+  mode: 'pattern', stage: 0, pat: 0, song: SONGS[0].id, step: 0, bpm: 80, passes: '2', metro: '4', judge: 'normal', latency: 0,
   strictHH: false, midiSound: false, metroVol: 0.6, drumVol: 0.7, flashInsts: INSTS.map((i) => i.id), hint: false, midiMap: null,
 };
 const loadStore = () => {
@@ -476,7 +404,8 @@ const loadDevice = () => {
 const stored = loadStore();
 const device = loadDevice();
 const settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
-const emptyProgress = () => ({ patterns: {}, insts: {}, bars: 0, last: null, flash: {}, flashCount: 0, flashStreak: 0 });
+// songs: 曲ごとの段階の成績、daily: 日ごとの練習時間・小節・ずれ（練習記録ページで使う）
+const emptyProgress = () => ({ patterns: {}, insts: {}, bars: 0, last: null, flash: {}, flashCount: 0, flashStreak: 0, songs: {}, daily: {} });
 let progress = { ...emptyProgress(), ...(stored.progress || {}) };
 // 端末のキーがあればそちらを使う（同期で入ってきたほかの端末の値は使わない）。なければ今の値を引き継ぐ
 if (device) {
@@ -501,6 +430,28 @@ const passesOf = () => (settings.passes === 'inf' ? Infinity : Number(settings.p
 const isHH = (id) => id === 'hh' || id === 'ho';
 const sameInst = (target, hit) => target === 'any' || target === hit || (!settings.strictHH && isHH(target) && isHH(hit));
 const currentPattern = () => STAGES[settings.stage].patterns[settings.pat];
+if (!SONG[settings.song]) settings.song = SONGS[0].id;
+const curSong = () => SONG[settings.song];
+const curStep = () => curSong().steps[Math.min(settings.step, curSong().steps.length - 1)];
+// 曲の段階を、叩く小節の並び（0から数える）にしたもの。まとまりの境目も段階の中の位置にする
+const songSheet = (song, step) => ({
+  barAt: (i) => song.bars[step.start + i],
+  passes: step.end - step.start,
+  sections: song.sections
+    .filter((s) => s.end > step.start && s.start < step.end)
+    .map((s) => ({ name: s.name, start: Math.max(s.start, step.start) - step.start, end: Math.min(s.end, step.end) - step.start })),
+});
+const playBpm = () => (settings.mode === 'song' ? stepBpm(curSong(), curStep()) : settings.bpm);
+// シャッフルでは8分のウラ（16分の2つ目の位置）を 2/3 拍にずらす
+const slotPos = (r, slot) => (r.swing && slot % 4 === 2 ? slot + 2 / 3 : slot);
+const addDaily = (sec, bars, offs) => {
+  const k = dayKey();
+  const d = { ...emptyDay(), ...(progress.daily[k] || {}) };
+  d.sec = Math.round((d.sec + sec) * 10) / 10;
+  d.bars += bars;
+  offs.forEach((o) => { d.offN += 1; d.offSum += o; d.offSq += o * o; });
+  progress.daily[k] = d;
+};
 const median = (xs) => { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const signed = (ms) => `${ms >= 0 ? '+' : '−'}${Math.abs(Math.round(ms))}ms`;
 
@@ -673,41 +624,62 @@ const makeNote = (ev, voice) => {
   return { note, lanes, slot: ev.slot };
 };
 
-let geom = null; // { timeline: [[slot, x]], top, bottom }
+let geom = null; // { bars: Map(何小節目 → { timeline: [[slot, x]], top, bottom }) }
+const ROW_H = 150;
 
-const drawPattern = (p, colorOf) => {
+// bars: [{ p: 1小節のパターン, abs: 演奏の中で何小節目か, pos: 置く位置（省略時は並び順）}] を、1段に perRow 小節ずつ並べて描く
+const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null) => {
   const el = $('score');
   el.innerHTML = '';
   const w = Math.max(320, Math.floor(el.clientWidth));
   const renderer = new VF.Renderer(el, VF.Renderer.Backends.SVG);
-  renderer.resize(w, 150);
+  const posOf = (b, i) => b.pos ?? i;
+  renderer.resize(w, (Math.floor(Math.max(...bars.map(posOf)) / perRow) + 1) * ROW_H);
   const ctx = renderer.getContext();
-  const stave = new VF.Stave(4, 24, w - 10).addClef('percussion').addTimeSignature('4/4');
-  stave.setContext(ctx).draw();
-  const built = ['up', 'down'].map((v) => voiceEvents(p, v).map((ev) => makeNote(ev, v)));
-  built.flat().forEach((n) => n.lanes.forEach((l, i) => {
-    const c = colorOf(n.slot, l);
-    if (c) n.note.setKeyStyle(i, { fillStyle: c, strokeStyle: c });
-  }));
-  const voices = built.map((ns) => new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables(ns.map((n) => n.note)));
-  const beams = built.flatMap((ns, vi) => VF.Beam.generateBeams(ns.map((n) => n.note), {
-    groups: [new VF.Fraction(1, 4)], stem_direction: vi === 0 ? 1 : -1, beam_rests: false,
-  }));
-  new VF.Formatter().joinVoices(voices).formatToStave(voices, stave);
-  voices.forEach((v) => v.draw(ctx, stave));
-  beams.forEach((b) => b.setContext(ctx).draw());
-  const xs = new Map();
-  built.flat().forEach((n) => {
-    const x = (n.note.getNoteHeadBeginX() + n.note.getNoteHeadEndX()) / 2;
-    xs.set(n.slot, Math.min(xs.get(n.slot) ?? Infinity, x));
+  const bw = (w - 10) / perRow;
+  geom = { bars: new Map() };
+  bars.forEach((bar, i) => {
+    const { p, abs } = bar;
+    const row = Math.floor(posOf(bar, i) / perRow);
+    const col = posOf(bar, i) % perRow;
+    const stave = new VF.Stave(4 + col * bw, 24 + row * ROW_H, bw);
+    if (col === 0) stave.addClef('percussion');
+    if (timeAt(abs, i)) stave.addTimeSignature('4/4');
+    stave.setContext(ctx).draw();
+    // まとまりの名前（イントロ・サビなど）は、そのまとまりの最初の小節の左上に書く
+    const label = labelAt(abs);
+    if (label) {
+      ctx.save();
+      ctx.setFont('Zen Maru Gothic, sans-serif', 12, 'bold');
+      ctx.setFillStyle('#a4492b');
+      ctx.fillText(label, stave.getX() + 4, stave.getYForLine(0) - 26);
+      ctx.restore();
+    }
+    const built = ['up', 'down'].map((v) => voiceEvents(p, v).map((ev) => makeNote(ev, v)));
+    built.flat().forEach((n) => n.lanes.forEach((l, k) => {
+      const c = colorOf(abs, n.slot, l);
+      if (c) n.note.setKeyStyle(k, { fillStyle: c, strokeStyle: c });
+    }));
+    const voices = built.map((ns) => new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables(ns.map((n) => n.note)));
+    const beams = built.flatMap((ns, vi) => VF.Beam.generateBeams(ns.map((n) => n.note), {
+      groups: [new VF.Fraction(1, 4)], stem_direction: vi === 0 ? 1 : -1, beam_rests: false,
+    }));
+    new VF.Formatter().joinVoices(voices).formatToStave(voices, stave);
+    voices.forEach((v) => v.draw(ctx, stave));
+    beams.forEach((b) => b.setContext(ctx).draw());
+    const xs = new Map();
+    built.flat().forEach((n) => {
+      const x = (n.note.getNoteHeadBeginX() + n.note.getNoteHeadEndX()) / 2;
+      xs.set(n.slot, Math.min(xs.get(n.slot) ?? Infinity, x));
+    });
+    const timeline = [...xs].sort((a, b) => a[0] - b[0]);
+    timeline.push([16, stave.getNoteEndX() - 4]);
+    geom.bars.set(abs, { timeline, top: stave.getYForLine(0) - 22, bottom: stave.getYForLine(4) + 22 });
   });
-  const timeline = [...xs].sort((a, b) => a[0] - b[0]);
-  timeline.push([16, stave.getNoteEndX() - 4]);
-  geom = { timeline, top: stave.getYForLine(0) - 22, bottom: stave.getYForLine(4) + 22 };
 };
 
-const slotToX = (f) => {
-  const tl = geom.timeline;
+const slotToX = (g, f) => {
+  const tl = g.timeline;
   const i = Math.max(0, tl.findIndex(([s], j) => j === tl.length - 1 || tl[j + 1][0] > f));
   const [s0, x0] = tl[i];
   const [s1, x1] = tl[Math.min(i + 1, tl.length - 1)];
@@ -757,21 +729,43 @@ let view = null;  // 楽譜に色を付けて見せている演奏（終わっ�
 let flash = null; // 楽器フラッシュの出題
 let learning = null; // MIDI割り当ての学習中の楽器
 
-const colorOf = (slot, lane) => {
+const colorOf = (pass, slot, lane) => {
   if (!view) return null;
-  const t = view.targets.find((x) => x.pass === view.displayPass && x.slot === slot && x.lane === lane);
+  const t = view.targets.find((x) => x.pass === pass && x.slot === slot && x.lane === lane);
   return t && t.result ? COLOR[t.result] : null;
+};
+
+// 楽譜に見せる小節。パターンは今の1小節、曲はまとまりの中を「1段の小節数 × 2段」ずつ
+const perRowNow = () => ($('score').clientWidth >= 620 ? 2 : 1);
+const sheetNow = () => view ?? (settings.mode === 'song'
+  ? songSheet(curSong(), curStep())
+  : { barAt: () => currentPattern(), sections: null });
+// 曲は2段を交互に使う：今の段を叩いているあいだ、もう一方の段に次の段を出しておく（先を読めるように）
+const windowBars = () => {
+  const sh = sheetNow();
+  const cur = view ? view.displayPass : 0;
+  if (!sh.sections) return { bars: [{ p: sh.barAt(cur), abs: cur }], perRow: 1, timeAt: (abs, i) => i === 0 };
+  const per = perRowNow();
+  const row = Math.floor(cur / per);
+  // 段 r は上（偶数）か下（奇数）の決まった位置に出す。曲の最後で次の段が無いときは空ける
+  const rows = row % 2 === 0 ? [row, row + 1] : [row + 1, row];
+  const bars = rows.flatMap((r, ri) => Array.from({ length: per }, (_, i) => ({ abs: r * per + i, pos: ri * per + i })))
+    .filter(({ abs }) => abs < sh.passes)
+    .map(({ abs, pos }) => ({ p: sh.barAt(abs), abs, pos }));
+  return { bars, perRow: per, timeAt: (abs) => abs === 0, labelAt: (abs) => sh.sections.find((s) => s.start === abs)?.name };
 };
 
 const renderMarks = () => {
   const box = $('marks');
   box.innerHTML = '';
-  if (!view || !geom || settings.mode !== 'pattern') return;
-  view.extras.filter((e) => e.pass === view.displayPass).forEach((e) => {
+  if (!view || !geom || settings.mode === 'flash') return;
+  view.extras.forEach((e) => {
+    const g = geom.bars.get(e.pass);
+    if (!g) return;
     const m = document.createElement('div');
     m.className = 'extra-mark';
-    m.style.left = `${slotToX(Math.min(15.99, Math.max(0, e.slotF)))}px`;
-    m.style.top = `${geom.top - 8}px`;
+    m.style.left = `${slotToX(g, Math.min(15.99, Math.max(0, e.slotF)))}px`;
+    m.style.top = `${g.top - 8}px`;
     box.append(m);
   });
 };
@@ -781,7 +775,8 @@ const render = () => {
     if (flash) drawSingle($('score'), flash.inst, flash.color, 170, 150, true, true);
     geom = null;
   } else {
-    drawPattern(view ? view.pattern : currentPattern(), colorOf);
+    const { bars, perRow, timeAt, labelAt } = windowBars();
+    drawBars(bars, colorOf, perRow, timeAt, labelAt);
   }
   renderMarks();
 };
@@ -809,8 +804,9 @@ const base = (r) => r.startAudio * 1000 + r.offset;
 const ensureTargets = (r, pass) => {
   if (pass >= r.passes || r.made.has(pass)) return;
   r.made.add(pass);
-  lanesOf(r.pattern).forEach((lane) => [...r.pattern[lane]].forEach((c, slot) => {
-    if (c === 'x') r.targets.push({ pass, slot, lane, inst: r.calib ? 'any' : lane, rel: (16 + pass * 16 + slot) * r.s16, result: null, offset: null });
+  const bar = r.barAt(pass);
+  lanesOf(bar).forEach((lane) => [...bar[lane]].forEach((c, slot) => {
+    if (c === 'x') r.targets.push({ pass, slot, lane, inst: r.calib ? 'any' : lane, rel: (16 + pass * 16 + slotPos(r, slot)) * r.s16, result: null, offset: null });
   }));
 };
 
@@ -822,10 +818,15 @@ const schedule = (r) => {
     r.k += 1;
     if (k < 16) { if (k % 4 === 0) click(t, k === 0 ? 2 : 1); continue; }
     const slot = (k - 16) % 16;
-    if (slot === 0) ensureTargets(r, Math.floor((k - 16) / 16) + 1);
+    const pass = Math.floor((k - 16) / 16);
+    if (slot === 0) ensureTargets(r, pass + 1);
+    const ts = t + ((slotPos(r, slot) - slot) * r.s16) / 1000;
     if (r.metro === '4' && slot % 4 === 0) click(t, slot === 0 ? 2 : 1);
-    if (r.metro === '8' && slot % 2 === 0) click(t, slot === 0 ? 2 : slot % 4 === 0 ? 1 : 0);
-    if (r.demo) lanesOf(r.pattern).forEach((l) => { if (r.pattern[l][slot] === 'x') playDrum(l, t); });
+    if (r.metro === '8' && slot % 2 === 0) click(ts, slot === 0 ? 2 : slot % 4 === 0 ? 1 : 0);
+    if (r.demo) {
+      const bar = r.barAt(pass);
+      lanesOf(bar).forEach((l) => { if (bar[l][slot] === 'x') playDrum(l, ts); });
+    }
   }
 };
 
@@ -849,13 +850,18 @@ const frame = () => {
     const pass = Math.floor(pos / 16);
     if (pass < r.passes) {
       if (pass !== r.displayPass) { r.displayPass = pass; markDirty(); }
-      setCount(r.demo ? '♪ <small>お手本</small>' : `${pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目</small>`);
-      if (geom) {
-        const ph = $('playhead');
+      const sec = r.sections?.find((s) => pass >= s.start && pass < s.end);
+      const where = `${pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目${sec ? `・${sec.name}` : ''}</small>`;
+      setCount(r.demo ? (r.sections ? `♪ ${where}` : '♪ <small>お手本</small>') : where);
+      const g = geom?.bars.get(pass);
+      const ph = $('playhead');
+      if (g) {
         ph.hidden = false;
-        ph.style.left = `${slotToX(pos % 16)}px`;
-        ph.style.top = `${geom.top}px`;
-        ph.style.height = `${geom.bottom - geom.top}px`;
+        ph.style.left = `${slotToX(g, pos % 16)}px`;
+        ph.style.top = `${g.top}px`;
+        ph.style.height = `${g.bottom - g.top}px`;
+      } else {
+        ph.hidden = true;
       }
     } else {
       $('playhead').hidden = true;
@@ -905,11 +911,16 @@ const startRun = async ({ demo = false, calib = false } = {}) => {
   } finally {
     starting = false;
   }
-  const pattern = calib ? CALIB_PATTERN : currentPattern();
-  const s16 = 60000 / settings.bpm / 4;
-  const passes = calib ? 4 : demo ? 1 : passesOf();
+  const song = !calib && settings.mode === 'song' ? curSong() : null;
+  const step = song ? curStep() : null;
+  const sheet = song ? songSheet(song, step) : null;
+  const pattern = calib ? CALIB_PATTERN : song ? null : currentPattern();
+  const bpm = calib ? settings.bpm : playBpm();
+  const s16 = 60000 / bpm / 4;
+  const passes = calib ? 4 : sheet ? sheet.passes : demo ? 1 : passesOf();
   run = {
-    pattern, demo, calib, s16, passes, bpm: settings.bpm, total: 16 + passes * 16, k: 0,
+    pattern, song, step, swing: !!song?.swing, barAt: sheet ? sheet.barAt : () => pattern, sections: sheet ? sheet.sections : null,
+    demo, calib, s16, passes, bpm, total: 16 + passes * 16, k: 0, startedAt: performance.now(),
     startAudio: ctx.currentTime + 0.3, offset: perfOffset(ctx), offSamples: [],
     targets: [], extras: [], made: new Set(), displayPass: 0, metro: calib ? '4' : settings.metro,
   };
@@ -1016,13 +1027,26 @@ const finishRun = () => {
   }
   r.displayPass = Math.max(0, Math.min(r.displayPass, played - 1));
   const s = summarize(r.targets, r.extras);
-  const cleared = s.rate >= CLEAR_RATE && played >= 1;
-  const p = r.pattern;
-  const rec = progress.patterns[p.id] ?? { best: 0, bestBpm: 0, cleared: false, clearBpm: 0, plays: 0 };
-  rec.plays += 1;
-  if (s.rate > rec.best || (s.rate === rec.best && r.bpm > rec.bestBpm)) { rec.best = s.rate; rec.bestBpm = r.bpm; }
-  if (cleared) { rec.cleared = true; rec.clearBpm = Math.max(rec.clearBpm, r.bpm); }
-  progress.patterns[p.id] = rec;
+  // 曲は段階の最後まで叩いたときだけクリアにする
+  const cleared = s.rate >= CLEAR_RATE && (r.song ? played >= r.passes : played >= 1);
+  if (r.song) {
+    const rec = progress.songs[r.song.id] ?? { steps: {}, plays: 0 };
+    const st = rec.steps[r.step.key] ?? { best: 0, cleared: false };
+    rec.plays += 1;
+    if (played >= r.passes) st.best = Math.max(st.best, s.rate);
+    if (cleared) st.cleared = true;
+    rec.steps[r.step.key] = st;
+    progress.songs[r.song.id] = rec;
+  } else {
+    const p = r.pattern;
+    const rec = progress.patterns[p.id] ?? { best: 0, bestBpm: 0, cleared: false, clearBpm: 0, plays: 0 };
+    rec.plays += 1;
+    if (s.rate > rec.best || (s.rate === rec.best && r.bpm > rec.bestBpm)) { rec.best = s.rate; rec.bestBpm = r.bpm; }
+    if (cleared) { rec.cleared = true; rec.clearBpm = Math.max(rec.clearBpm, r.bpm); }
+    progress.patterns[p.id] = rec;
+  }
+  addDaily((performance.now() - r.startedAt) / 1000, played,
+    r.targets.filter((x) => x.offset !== null).map((x) => x.offset));
   r.targets.forEach((x) => {
     const st = progress.insts[x.lane] ?? { n: 0, miss: 0 };
     st.n += 1;
@@ -1036,6 +1060,7 @@ const finishRun = () => {
   render();
   showResult(r, s, cleared);
   renderPatternBar();
+  renderSongBars();
   renderInfo();
   renderStats();
 };
@@ -1043,17 +1068,19 @@ const finishRun = () => {
 const showResult = (r, s, cleared) => {
   const missLanes = [...new Set(r.targets.filter((x) => x.result === 'miss').map((x) => x.lane))];
   const el = $('result');
-  el.className = `result only-pattern ${cleared ? 'clear' : 'fail'}`;
+  const stars = r.song && cleared && r.step.stars ? ` ${'★'.repeat(r.step.stars)}` : '';
+  const nextLabel = r.song ? '次の段階 →' : '次のパターン →';
+  el.className = `result only-play ${cleared ? 'clear' : 'fail'}`;
   el.innerHTML = `
-    <h2>${cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
-    <p class="big">ヒット率 <b>${Math.round(s.rate * 100)}%</b> <span class="sub">（クリアは${CLEAR_RATE * 100}%以上・BPM ${r.bpm}）</span></p>
+    <h2>${cleared ? `クリア！${stars}` : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
+    <p class="big">ヒット率 <b>${Math.round(s.rate * 100)}%</b> <span class="sub">（クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・BPM ${r.bpm}）</span></p>
     <p>Perfect ${s.perfect}・Good ${s.good}・Miss ${s.miss}・余分 ${s.extra}</p>
     ${s.mean !== null ? `<p>平均のずれ ${signed(s.mean)}（${tendency(s.mean)}）${s.sd !== null ? `・ばらつき ±${Math.round(s.sd)}ms` : ''}</p>` : ''}
     ${missLanes.length ? `<p class="sub">ミスがあった楽器：${missLanes.map((l) => INST[l].name).join('、')}</p>` : ''}
     <div class="controls">
       <button type="button" data-act="again">もう一度（Enter）</button>
-      ${cleared ? '<button type="button" class="ghost" data-act="faster">BPMを10上げてもう一度</button>' : ''}
-      <button type="button" class="ghost" data-act="next">次のパターン →</button>
+      ${cleared && !r.song ? '<button type="button" class="ghost" data-act="faster">BPMを10上げてもう一度</button>' : ''}
+      <button type="button" class="ghost" data-act="next">${nextLabel}</button>
     </div>`;
   el.hidden = false;
   setFeedback('', '');
@@ -1100,6 +1127,8 @@ const recordFlash = (id, firstTry, sec) => {
   progress.flash[id] = s;
   progress.flashCount += firstTry || sec !== null ? 1 : 0;
   progress.flashStreak = firstTry ? progress.flashStreak + 1 : 0;
+  // 練習時間は1問10秒まで数える（放っておいた時間は入れない）
+  if (flash) addDaily(Math.min(10, (performance.now() - flash.shownAt) / 1000), 0, []);
   save();
   renderStats();
 };
@@ -1235,9 +1264,41 @@ const renderPatternBar = () => {
   }).join('');
 };
 
+const renderSongBars = () => {
+  $('songBar').innerHTML = SONGS.map((s) => {
+    const n = songStars(s, progress.songs[s.id]);
+    return `<button type="button" data-song="${s.id}" aria-pressed="${s.id === settings.song}" title="${s.genre}・BPM ${s.tempo}">${s.title}<span class="stars">${starText(n)}</span></button>`;
+  }).join('');
+  const song = curSong();
+  const rec = progress.songs[song.id];
+  $('stepBar').innerHTML = song.steps.map((st, i) => {
+    const done = rec?.steps?.[st.key]?.cleared;
+    return `<button type="button" data-step="${i}" aria-pressed="${i === settings.step}" class="${done ? 'done' : ''}" title="${st.label}・BPM ${stepBpm(song, st)}${done ? '（クリア済み）' : ''}">${st.short}</button>`;
+  }).join('');
+  scrollPressedIntoView($('songBar'));
+  scrollPressedIntoView($('stepBar'));
+};
+
+// 曲のときは段階で決まるテンポを見せ、変えられないようにする
+const syncBpmUI = () => {
+  const fixed = settings.mode === 'song';
+  $('bpmInput').value = playBpm();
+  ['bpmInput', 'bpmDown', 'bpmUp'].forEach((id) => { $(id).disabled = fixed; });
+};
+
 const renderInfo = () => {
+  syncBpmUI();
   if (settings.mode === 'flash') {
     $('stageInfo').innerHTML = '<b>楽器フラッシュ</b>　出た音符の楽器を叩きます。間違えやすい楽器ほど多く出ます。';
+    return;
+  }
+  if (settings.mode === 'song') {
+    const song = curSong();
+    const step = curStep();
+    const st = progress.songs[song.id]?.steps?.[step.key];
+    const recText = st ? `最高 ${Math.round(st.best * 100)}%${st.cleared ? '・クリア済み' : ''}` : 'まだ叩いていません';
+    $('stageInfo').innerHTML = `<b>${song.title}</b>（${song.title.includes(song.genre) ? '' : `${song.genre}・`}BPM ${song.tempo}${song.swing ? '・はねる' : ''}）${starText(songStars(song, progress.songs[song.id]))}<br>${song.desc}<br>`
+      + `<b>${step.label}</b>　BPM ${stepBpm(song, step)}・${step.end - step.start}小節　${recText}`;
     return;
   }
   const st = STAGES[settings.stage];
@@ -1267,7 +1328,10 @@ const renderStats = () => {
   }
   const all = STAGES.flatMap((s) => s.patterns);
   const cleared = all.filter((p) => progress.patterns[p.id]?.cleared).length;
-  $('stats').innerHTML = statBox(`${cleared} / ${all.length}`, 'クリアしたパターン')
+  const songStarSum = SONGS.reduce((a, s) => a + songStars(s, progress.songs[s.id]), 0);
+  $('stats').innerHTML = (settings.mode === 'song'
+    ? statBox(`${songStarSum} / ${SONGS.length * 3}`, '曲の★')
+    : statBox(`${cleared} / ${all.length}`, 'クリアしたパターン'))
     + statBox(progress.bars, '叩いた小節')
     + statBox(progress.last ? signed(progress.last.mean) : '–', '前回の平均のずれ')
     + statBox(progress.last && progress.last.sd !== null ? `±${Math.round(progress.last.sd)}ms` : '–', '前回のばらつき');
@@ -1297,7 +1361,7 @@ const syncSettingsUI = () => {
   document.querySelectorAll('#judgeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.judge)));
   const w = win();
   $('judgeNote').textContent = `Perfect ±${w.perfect}ms ／ Good ±${w.good}ms`;
-  $('bpmInput').value = settings.bpm;
+  syncBpmUI();
   $('passesSel').value = settings.passes;
   $('metroSel').value = settings.metro;
   $('latencyInput').value = settings.latency;
@@ -1320,6 +1384,27 @@ const selectPattern = (stage, pat) => {
   renderPatternBar();
   renderInfo();
   render();
+};
+
+const selectSong = (id, step) => {
+  cancelRun();
+  settings.song = id;
+  settings.step = step;
+  save();
+  view = null;
+  $('result').hidden = true;
+  setFeedback('', '');
+  renderSongBars();
+  renderInfo();
+  render();
+};
+
+// 段階を進める。曲の最後の段階の次は、次の曲のはじめへ
+const stepSong = (d) => {
+  const flat = SONGS.flatMap((s) => s.steps.map((_, i) => [s.id, i]));
+  const i = flat.findIndex(([id, st]) => id === settings.song && st === settings.step);
+  const [id, st] = flat[(i + d + flat.length) % flat.length];
+  selectSong(id, st);
 };
 
 const stepPattern = (d) => {
@@ -1352,6 +1437,8 @@ const setMode = (mode) => {
   $('result').hidden = true;
   renderInfo();
   renderStats();
+  if (mode === 'song') renderSongBars();
+  if (mode === 'pattern') renderStageBar();
   if (mode === 'flash') nextFlash();
   else { flash = null; $('nameHint').textContent = ''; render(); }
 };
@@ -1361,7 +1448,7 @@ const setBpm = (v) => {
   if (!Number.isFinite(n)) return;
   settings.bpm = Math.min(200, Math.max(40, n));
   save();
-  $('bpmInput').value = settings.bpm;
+  syncBpmUI();
 };
 
 // ---- イベント ----
@@ -1377,6 +1464,16 @@ $('patBar').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-pat]');
   if (b) selectPattern(settings.stage, Number(b.dataset.pat));
 });
+$('songBar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-song]');
+  if (b && b.dataset.song !== settings.song) selectSong(b.dataset.song, 0);
+});
+$('stepBar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-step]');
+  if (b) selectSong(settings.song, Number(b.dataset.step));
+});
+$('prevStepBtn').addEventListener('click', () => stepSong(-1));
+$('nextStepBtn').addEventListener('click', () => stepSong(1));
 $('startBtn').addEventListener('click', () => startRun());
 $('stopBtn').addEventListener('click', () => finishRun());
 $('demoBtn').addEventListener('click', () => startRun({ demo: true }));
@@ -1391,7 +1488,7 @@ $('result').addEventListener('click', (e) => {
   const act = e.target.closest('button')?.dataset.act;
   if (act === 'again') startRun();
   if (act === 'faster') { setBpm(settings.bpm + 10); startRun(); }
-  if (act === 'next') stepPattern(1);
+  if (act === 'next') { if (settings.mode === 'song') stepSong(1); else stepPattern(1); }
 });
 $('pads').addEventListener('pointerdown', (e) => {
   const pad = e.target.closest('.pad');
@@ -1416,9 +1513,11 @@ document.addEventListener('keydown', (e) => {
   // Tab で移動してボタンやリンクにフォーカスがあるときの Enter・矢印はそちらに任せる（マウスで押した後は今までどおり）
   const focused = e.target.closest && e.target.closest('button, a, summary, [role="tab"], [tabindex]');
   if (focused && tabFocus) return;
-  if (e.key === 'Enter' && settings.mode === 'pattern' && !run) { e.preventDefault(); startRun(); }
-  if (e.key === 'ArrowRight' && settings.mode === 'pattern' && !run) stepPattern(1);
-  if (e.key === 'ArrowLeft' && settings.mode === 'pattern' && !run) stepPattern(-1);
+  if (settings.mode === 'flash' || run) return;
+  const step = settings.mode === 'song' ? stepSong : stepPattern;
+  if (e.key === 'Enter') { e.preventDefault(); startRun(); }
+  if (e.key === 'ArrowRight') step(1);
+  if (e.key === 'ArrowLeft') step(-1);
 });
 document.addEventListener('keyup', (e) => { if (e.code === 'Space' && !(e.target.closest && e.target.closest('input, select, textarea'))) e.preventDefault(); });
 $('passesSel').addEventListener('change', (e) => { settings.passes = e.target.value; save(); });
@@ -1470,10 +1569,11 @@ $('mapResetBtn').addEventListener('click', () => {
   renderMap();
 });
 $('resetBtn').addEventListener('click', () => {
-  if (!confirm('パターンのクリア記録と、楽器フラッシュの成績を消します。よろしいですか？')) return;
-  progress = emptyProgress();
+  if (!confirm('パターン・曲のクリア記録と、楽器フラッシュの成績を消します（日ごとの練習時間の記録は残します）。よろしいですか？')) return;
+  progress = { ...emptyProgress(), daily: progress.daily };
   save();
   renderPatternBar();
+  renderSongBars();
   renderInfo();
   renderStats();
 });
@@ -1484,6 +1584,7 @@ window.addEventListener('resize', () => markDirty());
 renderPads();
 renderStageBar();
 renderPatternBar();
+renderSongBars();
 renderFlashChecks();
 renderMap();
 renderLegend();
