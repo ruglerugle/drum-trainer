@@ -339,7 +339,7 @@ footer a { color: var(--accent); }
   </section>
 </main>
 
-<footer>MIDI入力は Chrome / Edge で使えます（Safari は非対応）。ピアノの読譜練習は <a href="https://piano-trainer.habatakijuku.com/">読譜トレーナー</a> へ。</footer>
+<footer>MIDI入力は Chrome / Edge で使えます（Safari は非対応）。ピアノの読譜練習は <a href="https://piano-trainer.habatakijuku.com/">読譜トレーナー</a> へ。<br>ドラムの音は <a href="https://sfzinstruments.github.io/drums/sm_drums">SM Drums</a>（Public Domain）の録音です。</footer>
 
 <script>
 'use strict';
@@ -496,6 +496,7 @@ const audio = () => {
     noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
     const data = noiseBuf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    samplesReady = decodeSamples(actx);
   }
   metroBus.gain.value = settings.metroVol;
   drumBus.gain.value = settings.drumVol;
@@ -540,7 +541,71 @@ const DRUM_SOUND = {
   cr: (t) => noise(t, 'highpass', 3500, 0.45, 1.3),
   rd: (t) => { noise(t, 'highpass', 6000, 0.18, 0.6); tone(t, 'sine', 780, 760, 0.12, 0.5); },
 };
-const playDrum = (id, t) => DRUM_SOUND[id](t ?? audio().currentTime);
+// ---- ドラムの音：SM Drums（Public Domain）の生ドラムの録音。読み込めない楽器だけ上の合成音で鳴らす ----
+// 楽器ごとに 弱・中・強 の3段の叩き方を録音から切り出してある（sounds/<id>-<s|m|h>.mp3）
+const LAYERS = [
+  { key: 's', vel: 50 },
+  { key: 'm', vel: 90 },
+  { key: 'h', vel: 122 },
+];
+const SAMPLE_GAIN = 1.0;
+const DEFAULT_VEL = 100; // パッド・キーボード・お手本は「中」で鳴らす
+const sampleFiles = Object.keys(DRUM_SOUND).flatMap((id) => LAYERS.map((l, i) => ({ id, i, url: `sounds/${id}-${l.key}.mp3` })));
+// ファイルの取得はページを開いたときに始めておき、AudioContext ができたら音に変える
+const sampleBytes = sampleFiles.map((f) => fetch(f.url).then((res) => {
+  if (!res.ok) throw new Error(`${f.url}: HTTP ${res.status}`);
+  return res.arrayBuffer();
+}));
+const samples = {};
+let samplesReady = Promise.resolve();
+// mp3 は頭に無音が入ることがあるので、音の立ち上がりから鳴らす
+const onsetOf = (buf) => {
+  const x = buf.getChannelData(0);
+  const n = Math.min(x.length, Math.floor(buf.sampleRate * 0.25));
+  let peak = 0;
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(x[i]));
+  const th = peak * 0.05;
+  for (let i = 0; i < n; i++) if (Math.abs(x[i]) > th) return Math.max(0, i / buf.sampleRate - 0.001);
+  return 0;
+};
+const decodeSamples = (ctx) => Promise.allSettled(sampleFiles.map(async (f, k) => {
+  const buf = await ctx.decodeAudioData(await sampleBytes[k]);
+  (samples[f.id] ??= [])[f.i] = { buf, offset: onsetOf(buf) };
+})).then((rs) => {
+  const failed = rs.filter((r) => r.status === 'rejected');
+  if (failed.length) console.warn(`録音の音を ${failed.length} 個読み込めませんでした。その楽器は合成音で鳴らします`, failed.map((r) => r.reason));
+});
+
+// オープンハイハットは、クローズかペダルを踏んだら止まる
+let openHats = [];
+const chokeOpenHats = (t) => {
+  openHats.forEach(({ src, g }) => {
+    g.gain.cancelScheduledValues(t);
+    g.gain.setTargetAtTime(0, t, 0.012);
+    try { src.stop(t + 0.12); } catch (e) { console.warn('オープンハイハットを止められません', e); }
+  });
+  openHats = [];
+};
+
+const playDrum = (id, t, vel = DEFAULT_VEL) => {
+  const ctx = audio();
+  const when = t ?? ctx.currentTime;
+  if (id === 'hh' || id === 'hp' || id === 'ho') chokeOpenHats(when);
+  const li = vel < 70 ? 0 : vel < 110 ? 1 : 2;
+  const s = samples[id]?.[li] ?? samples[id]?.find(Boolean);
+  if (!s) { DRUM_SOUND[id](when); return; }
+  const src = ctx.createBufferSource();
+  const g = ctx.createGain();
+  src.buffer = s.buf;
+  g.gain.value = SAMPLE_GAIN * Math.min(1.25, Math.max(0.6, vel / LAYERS[li].vel));
+  src.connect(g).connect(drumBus);
+  src.start(when, s.offset);
+  if (id === 'ho') {
+    const entry = { src, g };
+    openHats.push(entry);
+    src.onended = () => { openHats = openHats.filter((h) => h !== entry); };
+  }
+};
 const click = (t, level) => tone(t, 'square', level === 2 ? 1600 : 1100, level === 2 ? 1500 : 1000, level === 0 ? 0.08 : level === 2 ? 0.3 : 0.2, 0.03, metroBus);
 // AudioContext の時刻 → performance.now() の時刻への差（スピーカーから出る時刻に合わせる）
 const outputOffset = (ctx) => {
@@ -810,6 +875,13 @@ const startRun = async ({ demo = false, calib = false } = {}) => {
       starting = false;
     }
   }
+  // 録音の音がそろうまで少し待つ（最初の数打が合成音にならないように。遅い回線では3秒で諦める）
+  starting = true;
+  try {
+    await Promise.race([samplesReady, new Promise((r) => setTimeout(r, 3000))]);
+  } finally {
+    starting = false;
+  }
   const pattern = calib ? CALIB_PATTERN : currentPattern();
   const s16 = 60000 / settings.bpm / 4;
   const passes = calib ? 4 : demo ? 1 : passesOf();
@@ -1047,9 +1119,9 @@ const flashPad = (id) => {
   pad._t = setTimeout(() => pad.classList.remove('hit'), 110);
 };
 
-const onHit = (inst, t, source) => {
+const onHit = (inst, t, source, vel = DEFAULT_VEL) => {
   flashPad(inst);
-  if (source !== 'midi' || settings.midiSound) playDrum(inst);
+  if (source !== 'midi' || settings.midiSound) playDrum(inst, undefined, vel);
   if (run) judgeHit(run, inst, t);
   else if (settings.mode === 'flash') flashHit(inst, t);
 };
@@ -1072,7 +1144,7 @@ const onMidiMessage = (e) => {
   if (learning) { assignMidi(learning, note); return; }
   const inst = noteToInst(note);
   $('midiMonitor').textContent = `最後に受け取った番号：${note}（${inst ? INST[inst].name : '割り当てなし'}）`;
-  if (inst) onHit(inst, e.timeStamp || performance.now(), 'midi');
+  if (inst) onHit(inst, e.timeStamp || performance.now(), 'midi', vel);
 };
 
 // help があるときは短い見出しだけ見せ、手順は開いて読む
