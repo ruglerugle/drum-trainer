@@ -14,7 +14,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
-<script src="data.js?v=1"></script>
+<script src="content.js?v=1"></script>
+<script src="data.js?v=2"></script>
+<script src="billing.js?v=1"></script>
 <style>
 /* ---- デザインの基本（色・文字・角の丸み）：読譜トレーナーと同じ作り。ドラムは赤橙が基調 ---- */
 :root {
@@ -434,6 +436,47 @@ button.learning { background: var(--hint); color: #3a2600; box-shadow: 0 3px 0 #
 .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 10px; }
 .legend-item { display: grid; justify-items: center; font-size: .78rem; text-align: center; line-height: 1.3; background: var(--bg); border-radius: 14px; padding: 4px 4px 8px; }
 .legend-item svg { display: block; }
+/* 有料版 */
+.node .pips i.lock { background: transparent; box-shadow: 0 0 0 1px var(--line) inset; }
+.node .sub .lk { color: var(--gold-dark); font-weight: 700; }
+.chip-bar button.locked { color: var(--play-muted); background: rgba(255, 255, 255, .04); box-shadow: 0 0 0 1px rgba(255, 255, 255, .1) inset; }
+.song-card .cover .lock-tag { position: absolute; right: 10px; bottom: 10px; background: rgba(0, 0, 0, .45); color: #fff; font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+button.gold { background: var(--gold); color: #3a2600; box-shadow: 0 4px 0 var(--gold-dark); }
+button.gold:hover:not(:disabled) { background: #ffbc3d; }
+button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
+.premium {
+  margin-top: 28px; border-radius: 24px; padding: 22px 24px; color: #fff; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center;
+  background: linear-gradient(120deg, #18141f 0%, #4a1d10 60%, #a5330f 100%); box-shadow: var(--shadow);
+}
+.premium[hidden] { display: none; }
+.premium div { flex: 1 1 260px; }
+.premium h2 { margin: 0 0 4px; font-size: 1.25rem; }
+.premium h2 em { font-style: normal; color: var(--gold); }
+.premium p { margin: 0; opacity: .85; font-size: .92rem; }
+.pay-hero { margin: -22px -22px 18px; padding: 26px 22px 22px; color: #fff; border-radius: 26px 26px 0 0; background: radial-gradient(120% 140% at 100% 0%, #ff9a5c 0%, #d9481c 45%, #5a1a08 100%); }
+.pay-hero h2 { margin: 0 0 4px; font-size: 1.45rem; }
+.pay-hero p { margin: 0; opacity: .9; font-size: .92rem; }
+.pay-hero .crown { font-size: 2rem; }
+.benefits { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 12px; }
+.benefits li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+.benefits li::before { content: "✓"; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #dcfce7; color: var(--ok); font-weight: 700; }
+.benefits b { display: block; }
+.benefits small { color: var(--muted); font-size: .84rem; }
+.price-card { border-radius: 18px; padding: 16px 18px; box-shadow: 0 0 0 2px var(--accent) inset; background: var(--accent-soft); display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.price-card b { font-size: 1.9rem; white-space: nowrap; }
+.price-card b span { font-size: 1rem; margin-left: 2px; }
+.price-card > div:last-child { font-size: .9rem; line-height: 1.5; }
+.price-card small { color: var(--muted); }
+.trust { display: grid; gap: 4px; margin-top: 14px; font-size: .8rem; color: var(--muted); text-align: center; }
+.plan-status { font-size: .92rem; }
+.plan-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.plan-legal { font-size: .78rem; color: var(--muted); }
+.acct-error { color: var(--ng); font-size: .9rem; }
+.acct-code { font-family: ui-monospace, Consolas, monospace; font-size: 1.2rem; letter-spacing: .05em; padding: 10px; background: var(--accent-soft); border-radius: 12px; text-align: center; }
+#acctDlg p { margin: 0 0 12px; font-size: .94rem; }
+#acctDlg input { width: 100%; margin-bottom: 12px; }
+.notice { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 50; max-width: min(92vw, 520px); background: var(--play-bg); color: #fff; padding: 12px 18px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); font-size: .92rem; }
+.notice[hidden] { display: none; }
 /* はじめての方へ */
 .ob-hero { text-align: center; padding: 8px 0 4px; }
 .ob-hero svg { margin-bottom: 8px; }
@@ -517,6 +560,11 @@ button.learning { background: var(--hint); color: #3a2600; box-shadow: 0 3px 0 #
       <button type="button" class="tile" data-start="flash"><span class="ic" style="background:#fff1d6">⚡</span><span><b>楽器フラッシュ</b><small>出た音符の楽器をすばやく叩く。ドラム譜の位置を覚える練習。</small></span></button>
       <button type="button" class="tile" data-start="weak"><span class="ic" style="background:#dcfce7">🎯</span><span><b>苦手なパターン</b><small>まだクリアしていない・ヒット率の低いパターンを選んで出します。</small></span></button>
       <button type="button" class="tile" data-start="calib"><span class="ic" style="background:#e8eefc">⏱</span><span><b>タイミングを測る</b><small>電子ドラムやスピーカーの遅れを、16回叩いて自動で補正。</small></span></button>
+    </div>
+
+    <div id="premiumBanner" class="premium" hidden>
+      <div><h2>すべてのリズムを、<em>最後まで</em>。</h2><p id="premiumText">有料版なら、ステージ5〜8の全パターンと、全8曲を通しのテンポ100%まで練習できます。</p></div>
+      <button type="button" class="gold big" data-paywall="banner">有料版について</button>
     </div>
   </div>
 </section>
@@ -687,12 +735,69 @@ button.learning { background: var(--hint); color: #3a2600; box-shadow: 0 3px 0 #
         <span id="midiMonitor" class="monitor"></span>
         <small id="midiHelp"></small>
       </div>
+      <div class="field wide" id="planField" hidden>
+        <h3 style="margin:6px 0 0">アカウント・有料版</h3>
+        <div id="planStatus" class="plan-status"></div>
+        <div id="planBtns" class="plan-btns"></div>
+        <div class="plan-legal">申し込むと<a href="https://habatakijuku.com/legal/terms.html" target="_blank" rel="noopener">利用規約</a>に同意したものとみなします。<a href="https://habatakijuku.com/legal/tokushoho.html" target="_blank" rel="noopener">特定商取引法に基づく表記</a>・<a href="https://habatakijuku.com/legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></div>
+      </div>
       <div class="field wide">
         <button id="resetBtn" class="ghost" type="button">成績の記録を消す</button>
       </div>
     </section>
   </div>
 </dialog>
+
+<!-- 有料版の案内 -->
+<dialog id="payDlg" class="sheet-dlg" aria-labelledby="payTitle">
+  <div class="dlg-in">
+    <div class="pay-hero">
+      <div class="dlg-head" style="margin:0"><span class="crown" aria-hidden="true">👑</span><span style="flex:1"></span><button type="button" class="icon" data-close aria-label="閉じる" style="background:rgba(255,255,255,.18);color:#fff">✕</button></div>
+      <h2 id="payTitle">ドラムトレーナー 有料版</h2>
+      <p id="payLead">好きな曲を、通しで叩けるところまで。</p>
+    </div>
+    <ul class="benefits" id="payBenefits"></ul>
+    <div class="price-card"><div><small>月額</small><br><b>480<span>円</span></b></div><div style="text-align:right"><small>いつでも解約できます<br>解約しても、期間の終わりまで使えます</small></div></div>
+    <div class="controls"><button type="button" class="gold big" id="payBuy" style="width:100%">有料版にする</button></div>
+    <div class="trust">
+      <span>🔒 お支払いは Stripe（世界中で使われている決済サービス）で行います。カード番号はこのサイトに届きません。</span>
+      <span>ログインはパスキー（指紋・顔・PIN）。パスワードもメールアドレスも要りません。</span>
+      <span><a href="https://habatakijuku.com/legal/terms.html" target="_blank" rel="noopener">利用規約</a>・<a href="https://habatakijuku.com/legal/tokushoho.html" target="_blank" rel="noopener">特定商取引法に基づく表記</a>・<a href="https://habatakijuku.com/legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></span>
+    </div>
+  </div>
+</dialog>
+
+<!-- アカウント（パスキー） -->
+<dialog id="acctDlg" class="sheet-dlg" aria-labelledby="acctTitle">
+  <div class="dlg-in">
+    <div class="dlg-head"><h2 id="acctTitle">ドラムトレーナー アカウント</h2><button type="button" class="icon" id="acctClose" aria-label="閉じる">✕</button></div>
+    <p id="acctMsg"></p>
+    <div data-view="register">
+      <p>表示名（ニックネーム）を決めて、この端末にパスキーを作ります。</p>
+      <input id="acctName" maxlength="30" placeholder="ニックネーム" autocomplete="nickname">
+      <div class="controls"><button id="acctRegisterBtn" type="button">パスキーを作って続ける</button></div>
+      <p style="margin-top:14px">前に作った方は <button type="button" class="link" data-goto="login">パスキーでログイン</button></p>
+    </div>
+    <div data-view="login" hidden>
+      <p>この端末（または同じアカウントの端末）に保存したパスキーでログインします。</p>
+      <div class="controls"><button id="acctLoginBtn" type="button">パスキーでログイン</button></div>
+      <p style="margin-top:14px">パスキーをなくした方は <button type="button" class="link" data-goto="recover">復旧コードを使う</button>／初めての方は <button type="button" class="link" data-goto="register">パスキーを作る</button></p>
+    </div>
+    <div data-view="recover" hidden>
+      <p>登録したときにメモした復旧コードを入れてください。</p>
+      <input id="acctCode" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off">
+      <div class="controls"><button id="acctRecoverBtn" type="button">復旧コードでログイン</button></div>
+    </div>
+    <div data-view="recovery" hidden>
+      <p>パスキーをなくしたときに使う<strong>復旧コード</strong>です。この画面にしか出ないので、メモして大切に保管してください。</p>
+      <p id="acctRecovery" class="acct-code"></p>
+      <div class="controls"><button id="acctRecoveryDone" type="button">メモしました</button></div>
+    </div>
+    <p id="acctError" class="acct-error" hidden></p>
+  </div>
+</dialog>
+
+<div id="notice" class="notice" role="status" hidden></div>
 
 <!-- 使い方 -->
 <dialog id="helpDlg" class="sheet-dlg" aria-labelledby="helpTitle">
@@ -792,10 +897,18 @@ const win = () => JUDGE[settings.judge] ?? JUDGE.normal;
 const passesOf = () => (settings.passes === 'inf' ? Infinity : Number(settings.passes));
 const isHH = (id) => id === 'hh' || id === 'ho';
 const sameInst = (target, hit) => target === 'any' || target === hit || (!settings.strictHH && isHH(target) && isHH(hit));
-const currentPattern = () => STAGES[settings.stage].patterns[settings.pat];
+// 有料版の続き（locked）を選んだままのときは、そのステージ・曲の最初を使う（billing.js のあとで leaveLocked が選び直す）
+const currentPattern = () => {
+  const ps = STAGES[settings.stage].patterns;
+  const p = ps[settings.pat];
+  return p && !p.locked ? p : ps[0];
+};
 if (!SONG[settings.song]) settings.song = SONGS[0].id;
 const curSong = () => SONG[settings.song];
-const curStep = () => curSong().steps[Math.min(settings.step, curSong().steps.length - 1)];
+const curStep = () => {
+  const st = curSong().steps[Math.min(settings.step, curSong().steps.length - 1)];
+  return st.locked ? curSong().steps[0] : st;
+};
 // 曲の段階を、叩く小節の並び（0から数える）にしたもの。まとまりの境目も段階の中の位置にする
 const songSheet = (song, step) => ({
   barAt: (i) => song.bars[step.start + i],
@@ -1643,6 +1756,7 @@ const scrollPressedIntoView = (bar) => {
 const renderPatternBar = () => {
   const st = STAGES[settings.stage];
   $('patBar').innerHTML = `<span class="bar-label">ステージ${settings.stage + 1}</span>` + st.patterns.map((p, i) => {
+    if (p.locked) return `<button type="button" data-pat="${i}" aria-pressed="false" class="locked" title="${p.id}「${p.name}」（有料版）">🔒</button>`;
     const done = progress.patterns[p.id]?.cleared;
     return `<button type="button" data-pat="${i}" aria-pressed="${i === settings.pat}" class="${done ? 'done' : ''}" title="${p.id}「${p.name}」${done ? '（クリア済み）' : ''}">${i + 1}</button>`;
   }).join('');
@@ -1652,6 +1766,7 @@ const renderSongBars = () => {
   const song = curSong();
   const rec = progress.songs[song.id];
   $('stepBar').innerHTML = song.steps.map((st, i) => {
+    if (st.locked) return `<button type="button" data-step="${i}" aria-pressed="false" class="locked" title="${st.label}（有料版）">🔒 ${st.short}</button>`;
     const done = rec?.steps?.[st.key]?.cleared;
     return `<button type="button" data-step="${i}" aria-pressed="${i === settings.step}" class="${done ? 'done' : ''}" title="${st.label}・BPM ${stepBpm(song, st)}${done ? '（クリア済み）' : ''}">${st.short}</button>`;
   }).join('');
@@ -1701,7 +1816,7 @@ const renderStats = () => {
   const fweak = Object.entries(progress.flash).filter(([, x]) => x.n >= 3 && x.first / x.n < 0.8)
     .sort((a, b) => a[1].first / a[1].n - b[1].first / b[1].n).slice(0, 3);
   $('flashWeak').innerHTML = fweak.length ? `苦手な楽器：${fweak.map(([id, x]) => `<strong>${INST[id].name}</strong>（${Math.round((x.first / x.n) * 100)}%）`).join('、')}` : '';
-  $('stats').innerHTML = statBox(`${clearedPatterns()} / ${ALL_PATTERNS.length}`, 'クリアしたパターン')
+  $('stats').innerHTML = statBox(`${clearedPatterns()} / ${allPatterns().length}`, 'クリアしたパターン')
     + statBox(`${songStarSum()} / ${SONGS.length * 3}`, '曲の★')
     + statBox(progress.last ? signed(progress.last.mean) : '–', '前回の平均のずれ')
     + statBox(progress.last && progress.last.sd !== null ? `±${Math.round(progress.last.sd)}ms` : '–', '前回のばらつき');
@@ -1743,6 +1858,7 @@ const syncSettingsUI = () => {
 };
 
 const selectPattern = (stage, pat) => {
+  if (STAGES[stage].patterns[pat]?.locked) return openPaywall('pattern');
   cancelRun();
   settings.stage = stage;
   settings.pat = pat;
@@ -1757,6 +1873,7 @@ const selectPattern = (stage, pat) => {
 };
 
 const selectSong = (id, step) => {
+  if (SONG[id].steps[step]?.locked) return openPaywall('song');
   cancelRun();
   settings.song = id;
   settings.step = step;
@@ -1772,14 +1889,14 @@ const selectSong = (id, step) => {
 
 // 段階を進める。曲の最後の段階の次は、次の曲のはじめへ
 const stepSong = (d) => {
-  const flat = SONGS.flatMap((s) => s.steps.map((_, i) => [s.id, i]));
+  const flat = SONGS.flatMap((s) => s.steps.flatMap((st, i) => (st.locked ? [] : [[s.id, i]])));
   const i = flat.findIndex(([id, st]) => id === settings.song && st === settings.step);
   const [id, st] = flat[(i + d + flat.length) % flat.length];
   selectSong(id, st);
 };
 
 const stepPattern = (d) => {
-  const flat = STAGES.flatMap((st, si) => st.patterns.map((_, pi) => [si, pi]));
+  const flat = STAGES.flatMap((st, si) => st.patterns.flatMap((p, pi) => (p.locked ? [] : [[si, pi]])));
   const i = flat.findIndex(([si, pi]) => si === settings.stage && pi === settings.pat);
   const [si, pi] = flat[(i + d + flat.length) % flat.length];
   selectPattern(si, pi);
@@ -1787,7 +1904,7 @@ const stepPattern = (d) => {
 
 // いま選んでいるステージまでで、クリアしていない・成績の低いパターンを選ぶ
 const pickWeakPattern = () => {
-  const cands = STAGES.slice(0, settings.stage + 1).flatMap((st, si) => st.patterns.map((p, pi) => ({ si, pi, rec: progress.patterns[p.id] })))
+  const cands = STAGES.slice(0, settings.stage + 1).flatMap((st, si) => st.patterns.flatMap((p, pi) => (p.locked ? [] : [{ si, pi, rec: progress.patterns[p.id] }])))
     .filter((c) => !(c.si === settings.stage && c.pi === settings.pat));
   const notCleared = cands.filter((c) => !c.rec?.cleared);
   const pool = notCleared.length ? notCleared : cands;
@@ -1826,18 +1943,65 @@ const setBpm = (v) => {
 // ---- 画面の構成：ホーム・練習・曲・記録の切り替え ----
 const VIEWS = ['home', 'play', 'songs', 'records'];
 const currentView = () => document.body.dataset.view;
-const ALL_PATTERNS = STAGES.flatMap((st) => st.patterns);
+const allPatterns = () => STAGES.flatMap((st) => st.patterns);
 const isCleared = (p) => !!progress.patterns[p.id]?.cleared;
-const clearedPatterns = () => ALL_PATTERNS.filter(isCleared).length;
+const clearedPatterns = () => allPatterns().filter(isCleared).length;
 const stageClears = (si) => STAGES[si].patterns.filter(isCleared).length;
 const songStarSum = () => SONGS.reduce((a, s) => a + songStars(s, progress.songs[s.id]), 0);
-const firstOpenPat = (si) => Math.max(0, STAGES[si].patterns.findIndex((p) => !isCleared(p)));
+// 鍵つき（有料版の続き）は飛ばして、まだクリアしていない最初のもの
+const firstOpenPat = (si) => Math.max(0, STAGES[si].patterns.findIndex((p) => !p.locked && !isCleared(p)));
 const nextStage = () => {
-  const i = STAGES.findIndex((_, si) => stageClears(si) < STAGES[si].patterns.length);
+  const i = STAGES.findIndex((st) => st.patterns.some((p) => !p.locked && !isCleared(p)));
   return i < 0 ? STAGES.length - 1 : i;
 };
 const songCleared = (song) => song.steps.filter((st) => progress.songs[song.id]?.steps?.[st.key]?.cleared).length;
-const firstOpenStep = (song) => Math.max(0, song.steps.findIndex((st) => !progress.songs[song.id]?.steps?.[st.key]?.cleared));
+const firstOpenStep = (song) => Math.max(0, song.steps.findIndex((st) => !st.locked && !progress.songs[song.id]?.steps?.[st.key]?.cleared));
+
+// ---- 有料版の案内と、完全版に差し替えたあとの描き直し（billing.js から呼ぶ） ----
+const openPaywall = (source) => {
+  if (!BILLING_ON) return;
+  const lockedPats = allPatterns().filter((p) => p.locked).length;
+  const lockedSongs = SONGS.filter((s) => s.locked).length;
+  $('payLead').textContent = source === 'song'
+    ? 'この曲の続きも、通しのテンポ100%まで練習できます。'
+    : source === 'pattern'
+      ? 'このステージの残りのパターンも、すべて練習できます。'
+      : '好きな曲を、通しで叩けるところまで。';
+  $('payBenefits').innerHTML = [
+    [`全${allPatterns().length}パターン`, `ステージ5〜8（16分のキック・スネア、フィルイン、ウラ拍）の鍵のついた${lockedPats}パターンも練習できます`],
+    [`全${SONGS.length}曲を最後まで`, `いまイントロだけ試せる${lockedSongs}曲も、まとまりごと → つなげる → 通し（テンポ60・80・100%）で★を集められます`],
+    ['無料の練習はそのまま', 'ステージ1〜4・楽器フラッシュ・タイミングの測定・記録は、これまでどおり使えます'],
+  ].map(([b, sm]) => `<li><span><b>${b}</b><small>${sm}</small></span></li>`).join('');
+  if ($('settingsDlg').open) $('settingsDlg').close();
+  $('payDlg').showModal();
+};
+// 鍵つきを選んだままなら、無料の範囲の最初に選び直す
+const leaveLocked = () => {
+  const p = STAGES[settings.stage].patterns[settings.pat];
+  if (!p || p.locked) settings.pat = firstOpenPat(settings.stage);
+  const st = curSong().steps[settings.step];
+  if (!st || st.locked) settings.step = firstOpenStep(curSong());
+  save();
+  afterContentChange();
+};
+const afterContentChange = () => {
+  renderPatternBar();
+  renderSongBars();
+  renderInfo();
+  if (currentView() === 'play' && !run) render();
+  renderHome();
+  if (currentView() === 'songs') renderSongLib();
+  renderStats();
+  updatePlayBar();
+};
+let noticeTimer = 0;
+const showNotice = (msg) => {
+  const el = $('notice');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { el.hidden = true; }, 6000);
+};
 
 const showView = (v) => {
   if (!VIEWS.includes(v)) return;
@@ -1932,13 +2096,14 @@ const renderPath = () => {
   const node = (si) => {
     const st = STAGES[si];
     const c = stageClears(si);
+    const lockedN = st.patterns.filter((p) => p.locked).length;
     const done = c === st.patterns.length;
     const cls = done ? 'done' : si === next ? 'next' : '';
     return `<button type="button" class="node ${cls}" data-stage="${si}">` +
       `<span class="dot">${done ? '✓' : si + 1}</span>` +
       `<span><span class="nm">${si + 1}. ${st.title}</span>` +
-      `<span class="pips" aria-hidden="true">${st.patterns.map((p) => `<i class="${isCleared(p) ? 'on' : ''}"></i>`).join('')}</span>` +
-      `<span class="sub">${c} / ${st.patterns.length} パターン クリア</span></span></button>`;
+      `<span class="pips" aria-hidden="true">${st.patterns.map((p) => `<i class="${isCleared(p) ? 'on' : p.locked ? 'lock' : ''}"></i>`).join('')}</span>` +
+      `<span class="sub">${c} / ${st.patterns.length} パターン クリア${lockedN ? `<span class="lk">・🔒${lockedN}は有料版</span>` : ''}</span></span></button>`;
   };
   const half = Math.ceil(STAGES.length / 2);
   $('pathA').innerHTML = STAGES.slice(0, half).map((_, i) => node(i)).join('');
@@ -1969,6 +2134,7 @@ const renderToday = () => {
 };
 
 const renderHome = () => {
+  $('premiumBanner').hidden = !(BILLING_ON && !account.paid && hasLocked());
   renderContinue();
   renderPath();
   renderToday();
@@ -1977,7 +2143,8 @@ const renderHome = () => {
 // ---- 曲の一覧 ----
 // 難しさ（1〜5）：16分のウラの音・はねるリズム・テンポから決める
 const songDifficulty = (song) => {
-  const odd = song.bars.filter((b) => lanesOf(b).some((l) => [...b[l]].some((c, i) => c === 'x' && i % 2 === 1))).length / song.bars.length;
+  // 鍵つきの曲は、曲の全体から測った値（content.js の odd）を使う
+  const odd = song.odd ?? song.bars.filter((b) => lanesOf(b).some((l) => [...b[l]].some((c, i) => c === 'x' && i % 2 === 1))).length / song.bars.length;
   let d = 1;
   if (odd > 0) d++;
   if (odd > 0.3) d++;
@@ -1998,8 +2165,8 @@ const renderSongLib = () => {
     const diff = songDifficulty(s);
     const done = songCleared(s);
     return `<button type="button" class="song-card" data-song="${s.id}">` +
-      `<span class="cover" style="background:linear-gradient(135deg, ${c1}, ${c2})">${s.title.includes(s.genre) ? '' : `<span class="tag">${s.genre}</span>`}<span class="tag bpm-tag">BPM ${s.tempo}${s.swing ? '・はねる' : ''}</span><span class="glyph">${DRUM_GLYPH}</span></span>` +
-      `<span class="song-meta"><b>${s.title}</b><small>${s.bars.length}小節・${s.sections.map((x) => x.name).join(' → ')}</small>` +
+      `<span class="cover" style="background:linear-gradient(135deg, ${c1}, ${c2})">${s.title.includes(s.genre) ? '' : `<span class="tag">${s.genre}</span>`}<span class="tag bpm-tag">BPM ${s.tempo}${s.swing ? '・はねる' : ''}</span><span class="glyph">${DRUM_GLYPH}</span>${s.locked ? `<span class="lock-tag">🔒 ${s.sectionNames[0]}だけ無料</span>` : ''}</span>` +
+      `<span class="song-meta"><b>${s.title}</b><small>${s.fullBars}小節・${s.sectionNames.join(' → ')}</small>` +
       `<span class="row"><span class="diff" title="難しさ ${diff}/5" aria-label="難しさ ${diff}/5">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= diff ? 'on' : ''}"></i>`).join('')}</span>` +
       `<span class="got" aria-label="★${n}">${starText(n)}</span></span>` +
       `<span class="bar" title="${done} / ${s.steps.length} 段階クリア"><i style="width:${(done / s.steps.length) * 100}%"></i></span></span></button>`;
@@ -2038,6 +2205,8 @@ const initUI = () => {
       return showView(go.dataset.gotoView);
     }
     if (t.closest('[data-continue]')) return showView('play');
+    const pw = t.closest('[data-paywall]');
+    if (pw) return openPaywall(pw.dataset.paywall);
     const st = t.closest('button[data-stage]');
     if (st) return openStage(Number(st.dataset.stage));
     const sc = t.closest('.song-card[data-song]');
@@ -2207,6 +2376,7 @@ syncSettingsUI();
 renderInfo();
 renderStats();
 initUI();
+initBilling();
 initMidi();
 </script>
 </body>
