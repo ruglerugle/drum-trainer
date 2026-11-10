@@ -162,6 +162,13 @@ body[data-view="play"] .tabs, body[data-view="play"] .topbar, body[data-view="pl
 .continue button { justify-self: start; position: relative; z-index: 1; margin-top: 6px; }
 .continue button.big { background: #fff; color: var(--accent-dark); box-shadow: 0 4px 0 #ffc9b3; }
 .continue button.big:hover { background: #fff6f2; }
+.continue::after { display: none; }
+.continue .chara-hero { position: absolute; right: 16px; bottom: 12px; width: 60px; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .25)); }
+@media (max-width: 520px) { .continue .chara-hero { width: 48px; right: 10px; bottom: 10px; } }
+.chara { display: block; height: auto; user-select: none; pointer-events: none; }
+.chara-result { width: 42px; margin: -4px auto -4px; }
+.premium .chara { width: 42px; flex: none; }
+.ob-hero .chara { width: 56px; margin: 0 auto 8px; }
 .today { display: grid; gap: 14px; align-content: start; }
 .today-row { display: flex; align-items: center; gap: 16px; }
 .ring { position: relative; width: 92px; height: 92px; flex: none; }
@@ -563,6 +570,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
     </div>
 
     <div id="premiumBanner" class="premium" hidden>
+      <img class="chara" src="/img/chara/crown.svg?v=1" alt="" width="42" height="38">
       <div><h2>すべてのリズムを、<em>最後まで</em>。</h2><p id="premiumText">有料版なら、ステージ5〜8の全パターンと、全8曲を通しのテンポ100%まで練習できます。</p></div>
       <button type="button" class="gold big" data-paywall="banner">有料版について</button>
     </div>
@@ -821,7 +829,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
 <!-- はじめての方へ -->
 <dialog id="obDlg" class="sheet-dlg" aria-labelledby="obTitle">
   <div class="dlg-in">
-    <div class="ob-hero"><svg width="64" height="64"><use href="#logo"/></svg></div>
+    <div class="ob-hero"><img class="chara" src="/img/chara/hello.svg?v=1" alt="" width="56" height="50"></div>
     <h2 id="obTitle">ようこそ、ドラムトレーナーへ</h2>
     <p>ドラム譜を読んで、リズムどおりに叩けるようになる練習です。いまのドラムの経験を教えてください。あとからホームでいつでも変えられます。</p>
     <div class="choices">
@@ -1568,9 +1576,9 @@ const showResult = (r, s, cleared) => {
   // 通しの段階は★の数、それ以外はクリアの印を大きく出す
   const top = r.song && r.step.stars
     ? `<div class="stars" aria-label="★${cleared ? r.step.stars : 0}">${[1, 2, 3].map((k) => `<span class="${cleared && k <= r.step.stars ? 'on' : ''}" style="--d:${k * 0.18}s">★</span>`).join('')}</div>`
-    : cleared ? '<div class="badge-clear" aria-hidden="true">🎉</div>' : '';
+    : '';
   el.className = `result only-play ${cleared ? 'clear' : 'fail'}`;
-  el.innerHTML = `${top}
+  el.innerHTML = `${charaImg(!cleared ? 'cheer' : r.song && r.step.stars && r.step.stars < 3 ? 'happy' : 'celebrate', 'chara-result')}${top}
     <h2>${cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
     <div class="rate"><small class="sub">ヒット率</small><b>${Math.round(s.rate * 100)}%</b></div>
     <p class="sub">クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・BPM ${r.bpm}</p>
@@ -2063,6 +2071,8 @@ const updatePlayBar = () => {
 };
 
 // ---- ホーム ----
+// キャラクター（img/chara/*.svg、design/gen_chara.py で描く）
+const charaImg = (name, cls) => `<img class="chara ${cls}" src="/img/chara/${name}.svg?v=1" alt="" width="60" height="54">`;
 const renderContinue = () => {
   const el = $('continueCard');
   if (settings.mode === 'song') {
@@ -2136,6 +2146,7 @@ const renderToday = () => {
 const renderHome = () => {
   $('premiumBanner').hidden = !(BILLING_ON && !account.paid && hasLocked());
   renderContinue();
+  $('continueCard').insertAdjacentHTML('beforeend', charaImg(settings.mode === 'pattern' && isCleared(currentPattern()) ? 'happy' : 'hello', 'chara-hero'));
   renderPath();
   renderToday();
 };
