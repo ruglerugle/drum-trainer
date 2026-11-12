@@ -18,6 +18,7 @@
 <script src="data.js?v=2"></script>
 <script src="billing.js?v=1"></script>
 <script src="timing.js?v=1"></script>
+<script src="assess.js?v=1"></script>
 <style>
 /* ---- デザインの基本（色・文字・角の丸み）：読譜トレーナーと同じ作り。ドラムは赤橙が基調 ---- */
 :root {
@@ -567,6 +568,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
     <div class="section-title"><h2>ほかの練習</h2></div>
     <div class="extras">
       <button type="button" class="tile" data-goto-view="songs"><span class="ic" style="background:#fdece5">🎵</span><span><b>曲で練習する</b><small>オリジナル8曲。4小節ずつ → つなげる → 通しで★を集める。</small></span></button>
+      <button type="button" class="tile" data-start="assess"><span class="ic" style="background:#fff1d6">🎯</span><span><b>実力テスト</b><small id="assessLast">1小節ずつ12問・約2分。ドラム譜を読んで叩く力を、レベル1〜10で測ります（無料）</small></span></button>
       <button type="button" class="tile" data-start="flash"><span class="ic" style="background:#fff1d6">⚡</span><span><b>楽器フラッシュ</b><small>出た音符の楽器をすばやく叩く。ドラム譜の位置を覚える練習。</small></span></button>
       <button type="button" class="tile" data-start="weak"><span class="ic" style="background:#dcfce7">🎯</span><span><b>苦手なパターン</b><small>まだクリアしていない・ヒット率の低いパターンを選んで出します。</small></span></button>
       <button type="button" class="tile" data-start="calib"><span class="ic" style="background:#e8eefc">⏱</span><span><b>タイミングを測る</b><small>電子ドラムやスピーカーの遅れを、16回叩いて自動で補正。</small></span></button>
@@ -591,6 +593,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
     <section class="stage" aria-label="練習">
       <div id="patBar" class="chip-bar pats only-pattern" role="group" aria-label="パターン"></div>
       <div id="stepBar" class="chip-bar only-song" role="group" aria-label="練習の段階"></div>
+      <div id="assessBanner" hidden></div>
       <div id="stageInfo" class="stage-info" aria-live="polite"></div>
       <div id="practiceBar" class="only-play"></div>
       <div id="result" class="result only-play" aria-live="polite" hidden></div>
@@ -1395,8 +1398,10 @@ const setRunningUI = (on) => {
 };
 
 let starting = false;
-const startRun = async ({ demo = false, calib = false } = {}) => {
+const startRun = async ({ demo = false, calib = false, assess = false } = {}) => {
   if (starting) return;
+  // テスト以外で始めたら、実力テストは終わりにする
+  if (!assess && assessRun) quitAssess();
   cancelRun();
   if (calib && settings.mode !== 'pattern') setMode('pattern');
   if (calib) {
@@ -1426,17 +1431,17 @@ const startRun = async ({ demo = false, calib = false } = {}) => {
   const song = !calib && settings.mode === 'song' ? curSong() : null;
   const step = song ? curStep() : null;
   const sheet = song ? loopSheet(songSheet(song, step)) : null;
-  if (!demo && !calib && practice().wait) { startWait(sheet); return; }
-  const pattern = calib ? CALIB_PATTERN : song ? null : currentPattern();
-  const bpm = calib ? settings.bpm : playBpm();
+  if (!demo && !calib && !assess && practice().wait) { startWait(sheet); return; }
+  const pattern = calib ? CALIB_PATTERN : assess ? assessRun.pattern : song ? null : currentPattern();
+  const bpm = calib ? settings.bpm : assess ? ASSESS_BPM : playBpm();
   const s16 = 60000 / bpm / 4;
-  const passes = calib ? 4 : sheet ? sheet.passes : demo ? 1 : passesOf();
+  const passes = calib ? 4 : assess ? 1 : sheet ? sheet.passes : demo ? 1 : passesOf();
   run = {
     pattern, song, step, swing: !!song?.swing, barAt: sheet ? sheet.barAt : () => pattern, sections: sheet ? sheet.sections : null,
     demo, calib, s16, passes, bpm, total: 16 + passes * 16, k: 0, startedAt: performance.now(),
     startAudio: ctx.currentTime + 0.3, offset: perfOffset(ctx), offSamples: [],
     targets: [], extras: [], made: new Set(), displayPass: 0, metro: calib ? '4' : settings.metro,
-    loopLen: sheet?.loopLen ?? 0, practice: !!song && !demo && (practice().speed < 100 || !!sheet?.loopLen),
+    loopLen: sheet?.loopLen ?? 0, practice: !!song && !demo && (practice().speed < 100 || !!sheet?.loopLen), assess,
   };
   meter.setRange(win().good, win().perfect);
   meter.reset();
@@ -1562,6 +1567,7 @@ const finishRun = () => {
   }
   r.displayPass = Math.max(0, Math.min(r.displayPass, played - 1));
   const s = summarize(r.targets, r.extras);
+  if (r.assess) { assessItemDone(r, s, played); return; }
   // 曲は段階の最後まで叩いたときだけクリアにする
   const cleared = !r.practice && s.rate >= CLEAR_RATE && (r.song ? played >= r.passes : played >= 1);
   if (r.practice) {
@@ -1785,6 +1791,116 @@ const finishWait = () => {
   $('playProg').style.width = '100%';
   $('playScore').textContent = `${pct}%`;
   $('playSub').textContent = '一回で正解';
+};
+
+// ---- 実力テスト：1小節ずつ12問。だんだん難しいパターンを BPM 90 で叩き、ヒット率85%以上で正解 ----
+const ASSESS_BPM = 90;
+const ASSESS_PASS = 0.85;
+const ASSESS_ITEMS = 12;
+// レベルごとのパターン（いくつかの中から1つ）。tags は結果の内訳
+const ASSESS_LEVELS = [
+  null,
+  { tags: ['4分音符'], text: '4分音符のビートを、テンポどおりに叩けます', pats: [
+    { hh: 'x...x...x...x...', sd: '....x.......x...', bd: 'x.......x.......' },
+    { hh: 'x...x...x...x...', sd: '....x.......x...', bd: 'x...x...x.......' }] },
+  { tags: ['8分音符'], text: '8ビート（ハイハットの8分刻み）を叩けます', pats: [
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.......x.......' },
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.......x.x.....' }] },
+  { tags: ['8分音符', 'キックの変化'], text: '8ビートで、キックの位置が変わっても叩けます', pats: [
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.....x.x.......' },
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.x.....x.x.....' }] },
+  { tags: ['オープン・ライド'], text: 'ハイハットのオープンやライドを読み分けられます', pats: [
+    { hh: 'x.x.x.x.x.x.x...', ho: '..............x.', sd: '....x.......x...', bd: 'x.......x.x.....' },
+    { rd: 'x.x.x.x.x.x.x.x.', cr: 'x...............', sd: '....x.......x...', bd: 'x.......x.......' }] },
+  { tags: ['16分音符'], text: '16分音符の刻みを叩けます', pats: [
+    { hh: 'xxxxxxxxxxxxxxxx', sd: '....x.......x...', bd: 'x.......x.......' },
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.......x..x....' }] },
+  { tags: ['16分音符', 'キックの変化'], text: '16分のキックの位置まで読めます', pats: [
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x..x..x...x.....' },
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.......x...', bd: 'x.....xx..x.....' }] },
+  { tags: ['フィル'], text: 'タムを回す簡単なフィルインを叩けます', pats: [
+    { hh: 'x.x.x.x.........', sd: '....x...xx......', t1: '..........xx....', ft: '............xx..', bd: 'x.......x.......' },
+    { hh: 'x.x.x.x.x.......', sd: '....x.....x.x...', t2: '..............x.', bd: 'x.......x.......' }] },
+  { tags: ['ウラ拍'], text: 'スネアがウラ拍に来るリズムも読めます', pats: [
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x..x....x...', bd: 'x.......x.x.....' },
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '....x.x.....x..x', bd: 'x.......x.......' }] },
+  { tags: ['16分音符', 'フィル'], text: '16分のフィルインを、テンポを崩さずに叩けます', pats: [
+    { hh: 'x.x.x.x.........', sd: '....x...xxxx....', t1: '............xx..', ft: '..............xx', bd: 'x.......x.......' },
+    { cr: 'x...............', hh: '..x.x.x.........', sd: '....x...xx.x....', t2: '............x.x.', bd: 'x.......x.....x.' }] },
+  { tags: ['ウラ拍', '16分音符'], text: '16分のシンコペーションまで、読んで叩けます', pats: [
+    { hh: 'x.x.x.x.x.x.x.x.', sd: '...x..x.....x..x', bd: 'x.....x...x.....' },
+    { hh: 'xxxxxxxxxxxxxxxx', sd: '....x..x.x..x...', bd: 'x..x......x..x..' }] },
+];
+const ASSESS_TAGS = ['4分音符', '8分音符', '16分音符', 'キックの変化', 'オープン・ライド', 'フィル', 'ウラ拍'];
+// 結果のレベル → 練習するとよいステージ（0から数える）
+const ASSESS_REC = [0, 1, 1, 2, 3, 4, 6, 7, 6, 7, 7]; // 4分,8ビート,シンバル,16分HH,16分キック,16分スネア,フィル,ウラ拍 の並び。次に越えるレベルの中身に合うもの
+let assessRun = null;
+const renderAssessTile = () => {
+  const el = $('assessLast');
+  const last = Assess.last(progress.assess);
+  if (el && last) el.textContent = `前回 レベル${last.level}（${last.date}）。1小節ずつ12問・約2分でもう一度測れます（無料）`;
+};
+const assessBanner = () => {
+  $('assessBanner').hidden = !assessRun;
+  if (assessRun) Assess.banner($('assessBanner'), { count: assessRun.st.count, items: assessRun.st.items, onQuit: quitAssess });
+};
+const nextAssessItem = () => {
+  if (!assessRun) return;
+  const cfg = ASSESS_LEVELS[assessRun.st.level];
+  const pat = cfg.pats[Math.floor(Math.random() * cfg.pats.length)];
+  assessRun.cfg = cfg;
+  assessRun.pattern = { id: `assess-${assessRun.st.level}`, name: `実力テスト`, ...pat };
+  assessBanner();
+  setFeedback('', `${assessRun.st.count + 1}問目：カウント4つのあとに1小節叩きます（BPM ${ASSESS_BPM}・ヒット率${ASSESS_PASS * 100}%以上で正解）`);
+  startRun({ assess: true });
+};
+const startAssess = () => {
+  if (settings.mode !== 'pattern') setMode('pattern');
+  showView('play');
+  assessRun = { st: Assess.staircase({ items: ASSESS_ITEMS, start: 3 }), cfg: null, pattern: null };
+  meter.reset();
+  nextAssessItem();
+};
+const quitAssess = () => {
+  if (!assessRun) return;
+  assessRun = null;
+  $('assessBanner').hidden = true;
+  if (run?.assess) cancelRun();
+  view = null;
+  render();
+  setFeedback('', '実力テストをやめました');
+};
+const assessItemDone = (r, s, played) => {
+  if (!assessRun) return;
+  const ok = played >= 1 && s.rate >= ASSESS_PASS;
+  assessRun.st.record(ok, assessRun.cfg.tags);
+  addDaily((performance.now() - r.startedAt) / 1000, played, r.targets.filter((x) => x.offset !== null).map((x) => x.offset));
+  save();
+  view = r;
+  render();
+  setFeedback(ok ? 'ok' : 'ng', `${ok ? '◎' : '✗'} ヒット率 ${Math.round(s.rate * 100)}%`);
+  if (assessRun.st.done) { setTimeout(finishAssess, 900); return; }
+  setTimeout(nextAssessItem, 1300);
+};
+const finishAssess = () => {
+  const a = assessRun;
+  if (!a) return;
+  assessRun = null;
+  $('assessBanner').hidden = true;
+  const level = a.st.result();
+  const prev = Assess.last(progress.assess);
+  const parts = a.st.parts();
+  progress.assess = Assess.push(progress.assess, { level, parts });
+  save();
+  renderAssessTile();
+  view = null;
+  render();
+  const si = Math.min(ASSESS_REC[level], STAGES.length - 1);
+  Assess.show({
+    title: 'ドラムの実力テスト', level, levelText: ASSESS_LEVELS[level].text, prev,
+    parts: ASSESS_TAGS.filter((t) => parts[t]).map((t) => ({ label: t, ...parts[t] })),
+    recommend: { label: `おすすめ：「${STAGES[si].title ?? STAGES[si].short}」のステージを練習する`, run: () => openStage(si) },
+  });
 };
 
 // ---- 楽器フラッシュ ----
@@ -2335,6 +2451,7 @@ const renderToday = () => {
 };
 
 const renderHome = () => {
+  renderAssessTile();
   $('premiumBanner').hidden = !(BILLING_ON && !account.paid && hasLocked());
   renderContinue();
   $('continueCard').insertAdjacentHTML('beforeend', charaImg(settings.mode === 'pattern' && isCleared(currentPattern()) ? 'happy' : 'hello', 'chara-hero'));
@@ -2417,6 +2534,7 @@ const initUI = () => {
     if (start) {
       const k = start.dataset.start;
       if (k === 'calib') return startRun({ calib: true });
+      if (k === 'assess') return startAssess();
       if (k === 'flash') { if (settings.mode !== 'flash') setMode('flash'); return showView('play'); }
       if (k === 'weak') { if (settings.mode !== 'pattern') setMode('pattern'); pickWeakPattern(); return showView('play'); }
     }
@@ -2457,7 +2575,7 @@ $('stepBar').addEventListener('click', (e) => {
 $('prevStepBtn').addEventListener('click', () => stepSong(-1));
 $('nextStepBtn').addEventListener('click', () => stepSong(1));
 $('startBtn').addEventListener('click', () => startRun());
-$('stopBtn').addEventListener('click', () => (run?.wait ? finishWait() : finishRun()));
+$('stopBtn').addEventListener('click', () => (assessRun ? quitAssess() : run?.wait ? finishWait() : finishRun()));
 $('demoBtn').addEventListener('click', () => startRun({ demo: true }));
 $('prevBtn').addEventListener('click', () => stepPattern(-1));
 $('nextBtn').addEventListener('click', () => stepPattern(1));
