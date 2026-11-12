@@ -17,6 +17,7 @@
 <script src="content.js?v=1"></script>
 <script src="data.js?v=2"></script>
 <script src="billing.js?v=1"></script>
+<script src="timing.js?v=1"></script>
 <style>
 /* ---- デザインの基本（色・文字・角の丸み）：読譜トレーナーと同じ作り。ドラムは赤橙が基調 ---- */
 :root {
@@ -74,6 +75,7 @@ select, .field input[type="number"] {
 }
 input[type="range"] { accent-color: var(--accent); }
 .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center; }
+.lap-line { min-height: 1.4em; text-align: center; font-size: .86rem; color: var(--gold); letter-spacing: .04em; }
 /* only-play = パターンと曲（叩いて判定する画面）、only-pattern / only-song / only-flash = そのモードだけ */
 body:not([data-mode="pattern"]) .only-pattern, body:not([data-mode="song"]) .only-song,
 body:not([data-mode="flash"]) .only-flash, body[data-mode="flash"] .only-play { display: none !important; }
@@ -590,6 +592,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
       <div id="patBar" class="chip-bar pats only-pattern" role="group" aria-label="パターン"></div>
       <div id="stepBar" class="chip-bar only-song" role="group" aria-label="練習の段階"></div>
       <div id="stageInfo" class="stage-info" aria-live="polite"></div>
+      <div id="practiceBar" class="only-play"></div>
       <div id="result" class="result only-play" aria-live="polite" hidden></div>
       <div class="score-wrap">
         <div id="score" role="img" aria-label="ドラム譜"></div>
@@ -597,7 +600,8 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
       </div>
       <div class="legend-dots only-play" aria-hidden="true">
         <span><i style="background:#16a34a"></i>Perfect</span>
-        <span><i style="background:#ffb020"></i>Good</span>
+        <span><i style="background:#2f6fb8"></i>Good・早い</span>
+        <span><i style="background:#d9701c"></i>Good・遅い</span>
         <span><i style="background:#e5484d"></i>Miss・余分</span>
       </div>
       <div class="status-line">
@@ -605,6 +609,8 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
         <div id="nameHint" class="name-hint only-flash"></div>
         <div id="feedback" class="feedback" aria-live="polite"></div>
       </div>
+      <div id="lapLine" class="lap-line only-play" aria-live="polite"></div>
+      <div id="tmeter" class="only-play" aria-hidden="true"></div>
       <div class="controls only-play">
         <button id="startBtn" class="big" type="button">▶ スタート</button>
         <button id="stopBtn" class="big" type="button" hidden>■ ストップ</button>
@@ -821,6 +827,14 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
     </ul>
     <h3>判定</h3>
     <p>ちょうどの時刻からのずれで Perfect・Good を決めます。幅は設定の「判定の厳しさ」で変えられます。叩かなかった音は Miss、楽譜にない音を叩くと「余分」になり、ヒット率が下がります。</p>
+    <p>叩くたびに「早い・遅い」とずれ（ミリ秒）を出し、楽譜の下の帯に直近の音を点で並べます（左が早い、右が遅い、白い線が平均）。Good の音符は、早いと青、遅いとオレンジで色を付けます。</p>
+    <h3>練習モード</h3>
+    <ul>
+      <li><b>速さ</b>（曲）：段階のテンポを 50〜100% に落として叩けます。</li>
+      <li><b>繰り返す</b>（曲）：選んだまとまりを、止めるまで繰り返します。1回ごとにヒット率とずれを出します。</li>
+      <li><b>正しく叩くまで待つ</b>：テンポなしで、光っている位置の楽器を正しく叩くと次へ進みます。読み方を確かめる練習に。</li>
+    </ul>
+    <p>練習モードの回は、クリアや★の記録には入りません（練習時間とずれは記録します）。</p>
     <h3>ドラム譜の見方</h3>
     <p>線と線のあいだ（間）や線の上の位置で、どの楽器かを表します。シンバル類は × の形の音符、太鼓は黒い丸。手で叩くものは棒（符尾）が上、足で踏むもの（キック・ペダル）は下向きに書きます。</p>
     <div id="legend" class="legend"></div>
@@ -855,7 +869,9 @@ const CLEAR_RATE = 0.9;
 const STORE_KEY = 'drumTrainer_v1';
 const DEFAULT_SETTINGS = {
   mode: 'pattern', stage: 0, pat: 0, song: SONGS[0].id, step: 0, bpm: 80, passes: '2', metro: '4', judge: 'normal', latency: 0,
-  goal: 600, onboarded: false, strictHH: false, midiSound: false, metroVol: 0.6, drumVol: 0.7, flashInsts: INSTS.map((i) => i.id), hint: false, midiMap: null,
+  goal: 600, onboarded: false, strictHH: false,
+  // 練習モード：速さ（曲の段階のテンポに対する%）・まとまりの繰り返し・正しく叩くまで待つ
+  practice: { speed: 100, loop: false, from: 0, to: 0, wait: false }, midiSound: false, metroVol: 0.6, drumVol: 0.7, flashInsts: INSTS.map((i) => i.id), hint: false, midiMap: null,
 };
 const loadStore = () => {
   try {
@@ -926,7 +942,8 @@ const songSheet = (song, step) => ({
     .filter((s) => s.end > step.start && s.start < step.end)
     .map((s) => ({ name: s.name, start: Math.max(s.start, step.start) - step.start, end: Math.min(s.end, step.end) - step.start })),
 });
-const playBpm = () => (settings.mode === 'song' ? stepBpm(curSong(), curStep()) : settings.bpm);
+const practice = () => ({ speed: 100, loop: false, from: 0, to: 0, wait: false, ...(settings.practice || {}) });
+const playBpm = () => (settings.mode === 'song' ? Math.round((stepBpm(curSong(), curStep()) * practice().speed) / 100) : settings.bpm);
 // シャッフルでは8分のウラ（16分の2つ目の位置）を 2/3 拍にずらす
 const slotPos = (r, slot) => (r.swing && slot % 4 === 2 ? slot + 2 / 3 : slot);
 const addDaily = (sec, bars, offs) => {
@@ -1077,7 +1094,7 @@ const perfOffset = (ctx) => outputOffset(ctx)
 // ---- 楽譜の描画 ----
 const DUR = { 1: '16', 2: '8', 3: '8d', 4: 'q', 16: 'w' };
 const REST_KEY = { up: 'e/5', down: 'e/4' };
-const COLOR = { perfect: '#16a34a', good: '#e09b00', miss: '#e5484d' };
+const COLOR = { perfect: '#16a34a', good: '#e09b00', early: '#2f6fb8', late: '#d9701c', miss: '#e5484d' };
 
 // 拍ごとに区切って、音符と休符の並びにする
 const voiceEvents = (p, voice) => {
@@ -1217,7 +1234,10 @@ let learning = null; // MIDI割り当ての学習中の楽器
 const colorOf = (pass, slot, lane) => {
   if (!view) return null;
   const t = view.targets.find((x) => x.pass === pass && x.slot === slot && x.lane === lane);
-  return t && t.result ? COLOR[t.result] : null;
+  if (!t || !t.result) return null;
+  // Good は早い・遅いで色を分ける
+  if (t.result === 'good' && Number.isFinite(t.offset)) return t.offset < 0 ? COLOR.early : COLOR.late;
+  return COLOR[t.result];
 };
 
 // 楽譜に見せる小節。パターンは今の1小節、曲はまとまりの中を「1段の小節数 × 2段」ずつ
@@ -1334,9 +1354,10 @@ const frame = () => {
   } else {
     const pass = Math.floor(pos / 16);
     if (pass < r.passes) {
-      if (pass !== r.displayPass) { r.displayPass = pass; markDirty(); }
+      if (pass !== r.displayPass) { r.displayPass = pass; markDirty(); if (r.loopLen && pass > 0 && pass % r.loopLen === 0) lapReport(r, pass); }
       $('playProg').style.width = `${Number.isFinite(r.passes) ? Math.min(100, (pos / (r.passes * 16)) * 100) : 100}%`;
-      const sec = r.sections?.find((s) => pass >= s.start && pass < s.end);
+      const pp = r.loopLen ? pass % r.loopLen : pass;
+      const sec = r.sections?.find((s) => pp >= s.start && pp < s.end);
       const where = `${pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目${sec ? `・${sec.name}` : ''}</small>`;
       setCount(r.demo ? (r.sections ? `♪ ${where}` : '♪ <small>お手本</small>') : where);
       const g = geom?.bars.get(pass);
@@ -1366,6 +1387,7 @@ const frame = () => {
 };
 
 const setRunningUI = (on) => {
+  practiceUI?.disable(on);
   $('startBtn').hidden = on;
   $('stopBtn').hidden = !on;
   $('demoBtn').disabled = on;
@@ -1403,7 +1425,8 @@ const startRun = async ({ demo = false, calib = false } = {}) => {
   }
   const song = !calib && settings.mode === 'song' ? curSong() : null;
   const step = song ? curStep() : null;
-  const sheet = song ? songSheet(song, step) : null;
+  const sheet = song ? loopSheet(songSheet(song, step)) : null;
+  if (!demo && !calib && practice().wait) { startWait(sheet); return; }
   const pattern = calib ? CALIB_PATTERN : song ? null : currentPattern();
   const bpm = calib ? settings.bpm : playBpm();
   const s16 = 60000 / bpm / 4;
@@ -1413,7 +1436,11 @@ const startRun = async ({ demo = false, calib = false } = {}) => {
     demo, calib, s16, passes, bpm, total: 16 + passes * 16, k: 0, startedAt: performance.now(),
     startAudio: ctx.currentTime + 0.3, offset: perfOffset(ctx), offSamples: [],
     targets: [], extras: [], made: new Set(), displayPass: 0, metro: calib ? '4' : settings.metro,
+    loopLen: sheet?.loopLen ?? 0, practice: !!song && !demo && (practice().speed < 100 || !!sheet?.loopLen),
   };
+  meter.setRange(win().good, win().perfect);
+  meter.reset();
+  $('lapLine').textContent = run.loopLen ? '1回ごとの結果をここに出します' : '';
   ensureTargets(run, 0);
   view = run;
   $('playProg').style.width = '0%';
@@ -1446,6 +1473,7 @@ const cancelRun = () => {
 };
 
 const judgeHit = (r, inst, tRaw) => {
+  if (r.wait) { waitHit(r, inst); return; }
   if (r.demo) return;
   const t = r.calib ? tRaw : tRaw - settings.latency;
   const w = r.calib ? CALIB_WIN : win();
@@ -1467,8 +1495,10 @@ const judgeHit = (r, inst, tRaw) => {
   cand.offset = dt;
   cand.result = Math.abs(dt) <= w.perfect ? 'perfect' : 'good';
   if (r.calib) setFeedback('ok', `${signed(dt)}`);
-  else if (cand.result === 'perfect') setFeedback('ok', 'Perfect');
-  else setFeedback('good', `Good（${dt < 0 ? '早い' : '遅い'} ${Math.abs(Math.round(dt))}ms）`);
+  else {
+    setFeedback(cand.result === 'perfect' ? 'ok' : 'good', `${cand.result === 'perfect' ? 'Perfect' : 'Good'}（${Timing.label(dt)}）`);
+    meter.push(dt);
+  }
   markDirty();
   updateLiveScore(r);
 };
@@ -1533,8 +1563,10 @@ const finishRun = () => {
   r.displayPass = Math.max(0, Math.min(r.displayPass, played - 1));
   const s = summarize(r.targets, r.extras);
   // 曲は段階の最後まで叩いたときだけクリアにする
-  const cleared = s.rate >= CLEAR_RATE && (r.song ? played >= r.passes : played >= 1);
-  if (r.song) {
+  const cleared = !r.practice && s.rate >= CLEAR_RATE && (r.song ? played >= r.passes : played >= 1);
+  if (r.practice) {
+    // 練習モード（速さを落とす・繰り返す）の回は、クリアと自己ベストに数えない
+  } else if (r.song) {
     const rec = progress.songs[r.song.id] ?? { steps: {}, plays: 0 };
     const st = rec.steps[r.step.key] ?? { best: 0, cleared: false };
     rec.plays += 1;
@@ -1575,14 +1607,14 @@ const showResult = (r, s, cleared) => {
   const el = $('result');
   const nextLabel = r.song ? '次の段階 →' : '次のパターン →';
   // 通しの段階は★の数、それ以外はクリアの印を大きく出す
-  const top = r.song && r.step.stars
+  const top = r.song && r.step.stars && !r.practice
     ? `<div class="stars" aria-label="★${cleared ? r.step.stars : 0}">${[1, 2, 3].map((k) => `<span class="${cleared && k <= r.step.stars ? 'on' : ''}" style="--d:${k * 0.18}s">★</span>`).join('')}</div>`
     : '';
   el.className = `result only-play ${cleared ? 'clear' : 'fail'}`;
   el.innerHTML = `${charaImg(!cleared ? 'cheer' : r.song && r.step.stars && r.step.stars < 3 ? 'happy' : 'celebrate', 'chara-result')}${top}
-    <h2>${cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
+    <h2>${r.practice ? '練習の結果' : cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
     <div class="rate"><small class="sub">ヒット率</small><b>${Math.round(s.rate * 100)}%</b></div>
-    <p class="sub">クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・BPM ${r.bpm}</p>
+    <p class="sub">${r.practice ? `練習モード（速さ ${practice().speed}%${r.loopLen ? '・繰り返し' : ''}）なので、クリアの記録には入りません・BPM ${r.bpm}` : `クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・BPM ${r.bpm}`}</p>
     <div class="counts"><span class="p">Perfect ${s.perfect}</span><span class="g">Good ${s.good}</span><span class="m">Miss ${s.miss}</span><span class="m">余分 ${s.extra}</span></div>
     ${s.mean !== null ? `<p>平均のずれ <b>${signed(s.mean)}</b>（${tendency(s.mean)}）${s.sd !== null ? `・ばらつき ±${Math.round(s.sd)}ms` : ''}</p>` : ''}
     ${missLanes.length ? `<p class="sub">ミスがあった楽器：${missLanes.map((l) => INST[l].name).join('、')}</p>` : ''}
@@ -1596,6 +1628,163 @@ const showResult = (r, s, cleared) => {
   $('playProg').style.width = '100%';
   $('playScore').textContent = `${Math.round(s.rate * 100)}%`;
   $('playSub').textContent = cleared ? 'クリア' : 'ヒット率';
+};
+
+// ---- 練習モード（速さ・まとまりの繰り返し・正しく叩くまで待つ）と、早い・遅いの帯 ----
+const meter = Timing.meter($('tmeter'), { good: win().good, perfect: win().perfect });
+let practiceUI = null;
+const renderPractice = () => {
+  if (settings.mode === 'flash') return;
+  const song = settings.mode === 'song';
+  const secs = song ? songSheet(curSong(), curStep()).sections : [];
+  const pr = practice();
+  const last = Math.max(0, secs.length - 1);
+  pr.from = Math.min(pr.from, last);
+  pr.to = Math.min(Math.max(pr.to, pr.from), last);
+  settings.practice = pr;
+  const opts = {
+    speed: song, loop: song, wait: true, waitLabel: '正しく叩くまで待つ', state: pr,
+    ranges: secs.map((x, i) => ({ value: i, label: x.name })),
+    note: (st) => (st.wait ? '待つ：テンポなしで、光っている位置の楽器を正しく叩くと先へ進みます（記録には入りません）'
+      : song && (st.speed < 100 || st.loop) ? '練習モードの回は、クリアの記録には入りません' : ''),
+    onChange: (st) => { settings.practice = st; save(); syncBpmUI(); },
+  };
+  if (!practiceUI) practiceUI = Timing.practiceBar($('practiceBar'), opts);
+  else { practiceUI.update(opts); practiceUI.set(pr); }
+};
+// 曲の段階のうち、選んだまとまりだけを止めるまで繰り返す
+const loopSheet = (sheet) => {
+  const pr = practice();
+  if (!pr.loop || !sheet.sections?.length) return sheet;
+  const secs = sheet.sections;
+  const from = Math.min(pr.from, secs.length - 1);
+  const to = Math.max(from, Math.min(pr.to, secs.length - 1));
+  const a = secs[from].start;
+  const len = secs[to].end - a;
+  return {
+    barAt: (i) => sheet.barAt(a + (i % len)), passes: Infinity, loopLen: len,
+    sections: secs.slice(from, to + 1).map((x) => ({ name: x.name, start: x.start - a, end: x.end - a })),
+  };
+};
+// 1回まわるごとに、その回のヒット率とずれを出す
+const lapReport = (r, pass) => {
+  const ts = r.targets.filter((x) => x.pass >= pass - r.loopLen && x.pass < pass);
+  const hit = ts.filter((x) => x.result === 'perfect' || x.result === 'good');
+  const st = Timing.stats(hit.map((x) => x.offset));
+  $('lapLine').textContent = (`${pass / r.loopLen}回目：ヒット率 ${Math.round((hit.length / Math.max(1, ts.length)) * 100)}%${st.n ? `・平均のずれ ${Timing.signed(st.mean)}（${Timing.tendency(st.mean)}）` : ''}`);
+};
+
+// 待つ：テンポなしで、光っている位置の楽器を正しく叩くまで先へ進まない
+const startWait = (sheet) => {
+  const song = settings.mode === 'song' ? curSong() : null;
+  const pattern = song ? null : currentPattern();
+  run = {
+    wait: true, song, step: song ? curStep() : null, pattern, barAt: sheet ? sheet.barAt : () => pattern,
+    sections: sheet ? sheet.sections : null, passes: sheet ? sheet.passes : passesOf(), loopLen: sheet?.loopLen ?? 0,
+    targets: [], extras: [], made: new Set(), displayPass: 0, pass: 0, slot: -1, moment: null,
+    firstTry: 0, moments: 0, lapMark: { moments: 0, firstTry: 0 }, startedAt: performance.now(), practice: true, demo: false, calib: false,
+  };
+  view = run;
+  meter.reset();
+  $('lapLine').textContent = run.loopLen ? '1回ごとの結果をここに出します' : '';
+  $('result').hidden = true;
+  $('playProg').style.width = '0%';
+  $('playScore').textContent = '–';
+  $('playSub').textContent = '一回で正解';
+  setFeedback('', '光っている位置の楽器を叩いてください。正しく叩くまで先へ進みません。');
+  setRunningUI(true);
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  waitAdvance(run);
+  if (run) run.raf = requestAnimationFrame(waitFrame);
+};
+const waitTargets = (r, pass) => {
+  if (r.made.has(pass)) return;
+  r.made.add(pass);
+  const bar = r.barAt(pass);
+  lanesOf(bar).forEach((lane) => [...bar[lane]].forEach((c, slot) => {
+    if (c === 'x') r.targets.push({ pass, slot, lane, inst: lane, result: null, offset: null });
+  }));
+};
+const waitLap = (r) => {
+  const n = r.moments - r.lapMark.moments;
+  const f = r.firstTry - r.lapMark.firstTry;
+  r.lapMark = { moments: r.moments, firstTry: r.firstTry };
+  if (n) $('lapLine').textContent = `${r.pass / r.loopLen}回目：一回で正解 ${Math.round((f / n) * 100)}%`;
+};
+// 次に叩く位置へ進む（空の小節はとばす。最後まで来たら終わる）
+const waitAdvance = (r) => {
+  for (let guard = 0; guard < 4096; guard++) {
+    if (r.pass >= r.passes) { finishWait(); return; }
+    waitTargets(r, r.pass);
+    const left = r.targets.filter((x) => x.pass === r.pass && x.result === null).map((x) => x.slot);
+    if (left.length) {
+      r.slot = Math.min(...left);
+      r.moment = { wrong: false };
+      r.displayPass = r.pass;
+      markDirty();
+      setCount(`${r.pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目・待つ</small>`);
+      if (Number.isFinite(r.passes)) $('playProg').style.width = `${((r.pass + r.slot / 16) / r.passes) * 100}%`;
+      return;
+    }
+    r.pass += 1;
+    if (r.loopLen && r.pass % r.loopLen === 0) waitLap(r);
+  }
+  console.warn('叩く音符が見つからないので、待つ練習を終えます');
+  finishWait();
+};
+const waitHit = (r, inst) => {
+  const t = r.targets.find((x) => x.pass === r.pass && x.slot === r.slot && x.result === null && sameInst(x.inst, inst));
+  if (!t) {
+    if (r.moment) r.moment.wrong = true;
+    setFeedback('ng', `${INST[inst].name} ではありません`);
+    return;
+  }
+  t.result = r.moment?.wrong ? 'good' : 'perfect';
+  markDirty();
+  // 同時に叩く楽器が残っていれば、そろうまで待つ
+  if (r.targets.some((x) => x.pass === r.pass && x.slot === r.slot && x.result === null)) return;
+  r.moments += 1;
+  if (!r.moment.wrong) r.firstTry += 1;
+  setFeedback(r.moment.wrong ? 'good' : 'ok', r.moment.wrong ? 'OK' : '一回で正解');
+  $('playScore').textContent = `${Math.round((r.firstTry / r.moments) * 100)}%`;
+  waitAdvance(r);
+};
+const waitFrame = () => {
+  const r = run;
+  if (!r || !r.wait) return;
+  const g = geom?.bars.get(r.pass);
+  const ph = $('playhead');
+  if (g && r.slot >= 0) {
+    ph.hidden = false;
+    ph.style.left = `${slotToX(g, r.slot)}px`;
+    ph.style.top = `${g.top}px`;
+    ph.style.height = `${g.bottom - g.top}px`;
+  } else ph.hidden = true;
+  r.raf = requestAnimationFrame(waitFrame);
+};
+const finishWait = () => {
+  const r = run;
+  if (!r || !r.wait) return;
+  stopTimers(r);
+  run = null;
+  if (!r.moments) { view = null; render(); setFeedback('', '止めました'); return; }
+  addDaily((performance.now() - r.startedAt) / 1000, r.pass, []);
+  progress.bars += r.pass;
+  save();
+  view = r;
+  render();
+  const pct = Math.round((r.firstTry / r.moments) * 100);
+  const el = $('result');
+  el.className = 'result only-play clear';
+  el.innerHTML = `<h2>待つ練習の結果</h2>
+    <div class="rate"><small class="sub">一回で正しく叩けた</small><b>${pct}%</b></div>
+    <p class="sub">${r.moments}か所・待つ練習なので、クリアの記録には入りません</p>
+    <div class="controls"><button type="button" data-act="again">↺ もう一度</button><button type="button" class="ghost" data-act="next">${r.song ? '次の段階 →' : '次のパターン →'}</button></div>`;
+  el.hidden = false;
+  setFeedback('', '');
+  $('playProg').style.width = '100%';
+  $('playScore').textContent = `${pct}%`;
+  $('playSub').textContent = '一回で正解';
 };
 
 // ---- 楽器フラッシュ ----
@@ -1790,6 +1979,7 @@ const syncBpmUI = () => {
 };
 
 const renderInfo = () => {
+  renderPractice();
   syncBpmUI();
   if (settings.mode === 'flash') {
     $('stageInfo').textContent = '出た音符の楽器を叩きます。まちがえやすい楽器ほど多く出ます。';
@@ -2267,7 +2457,7 @@ $('stepBar').addEventListener('click', (e) => {
 $('prevStepBtn').addEventListener('click', () => stepSong(-1));
 $('nextStepBtn').addEventListener('click', () => stepSong(1));
 $('startBtn').addEventListener('click', () => startRun());
-$('stopBtn').addEventListener('click', () => finishRun());
+$('stopBtn').addEventListener('click', () => (run?.wait ? finishWait() : finishRun()));
 $('demoBtn').addEventListener('click', () => startRun({ demo: true }));
 $('prevBtn').addEventListener('click', () => stepPattern(-1));
 $('nextBtn').addEventListener('click', () => stepPattern(1));
