@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-app="drum">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,7 +7,7 @@
 <title>練習記録 ― ドラムトレーナー</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23d9481c'/%3E%3Cellipse cx='20' cy='26' rx='11' ry='5' fill='%23ffb59a'/%3E%3Crect x='9' y='20' width='22' height='6' fill='%23ffb59a'/%3E%3Cellipse cx='20' cy='20' rx='11' ry='4.6' fill='white'/%3E%3Cpath d='M11 7l7 10M30 8l-8 9' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #f7f3f1; --paper: #ffffff; --ink: #221a26; --muted: #76697a; --line: #ece3df;
@@ -102,6 +102,25 @@ footer { padding-bottom: 28px; text-align: center; font-size: .8rem; color: var(
 @media (max-width: 560px) {
   .stage-row { grid-template-columns: 1fr; }
 }
+</style>
+<link rel="stylesheet" href="../studio.css?v=1">
+<style>
+/* スタジオの見た目に合わせた、マイページだけの調整（練習時間の濃さは真鍮の濃淡） */
+:root { --heat0: #1f1f24; --heat1: #3d3424; --heat2: #6b5838; --heat3: #a5844f; --heat4: #e6cd97; }
+h1 { font-weight: 300; letter-spacing: .08em; }
+.back { background: transparent !important; color: var(--gold) !important; box-shadow: 0 0 0 1px rgba(201, 169, 110, .45) inset !important; font-weight: 400; letter-spacing: .08em; }
+.pill.on { background: transparent; color: var(--ok); box-shadow: 0 0 0 1px rgba(92, 194, 138, .5) inset; }
+.pill.off { background: transparent; color: var(--muted); box-shadow: 0 0 0 1px var(--line) inset; }
+.cal i.today { outline-color: var(--gold); }
+.tip { background: var(--panel2); color: var(--ink); }
+.goal-line em { background: var(--paper); }
+.meter { background: var(--heat0) !important; box-shadow: none !important; padding: 0 !important; }
+.badge i { background: none !important; box-shadow: none !important; }
+.badge.got i { filter: grayscale(.2); }
+.tile .v { font-weight: 300; }
+.chip { background: transparent; border-color: var(--line); color: var(--muted); }
+.chip.done { background: transparent; border-color: rgba(92, 194, 138, .5); color: var(--ok); }
+.chip.tried { background: transparent; border-color: rgba(201, 169, 110, .45); color: var(--gold); }
 </style>
 </head>
 <body>
