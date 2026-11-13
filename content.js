@@ -823,11 +823,11 @@ const SONGS = [
     {
      "name": "Aメロ",
      "from": 16,
-     "to": 36
+     "to": 32
     },
     {
      "name": "サビ",
-     "from": 36,
+     "from": 32,
      "to": 54
     }
    ]
