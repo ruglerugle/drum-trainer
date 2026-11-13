@@ -36,9 +36,11 @@ const prepareContent = () => {
     });
   }));
   SONGS.forEach((s) => {
+    // 1小節の16分音符の数（6/8 の曲は12）
+    const steps = s.time === '6/8' ? 12 : 16;
     Object.entries(s.parts).forEach(([name, p]) => Object.keys(p).forEach((k) => {
       if (!INST[k]) throw new Error(`曲 ${s.id} のパート ${name} に知らない楽器 ${k} があります`);
-      if (!/^[x.]{16}$/.test(p[k])) throw new Error(`曲 ${s.id} のパート ${name} の ${k} が16文字の x/. ではありません: ${p[k]}`);
+      if (!new RegExp(`^[x.]{${steps}}$`).test(p[k])) throw new Error(`曲 ${s.id} のパート ${name} の ${k} が${steps}文字の x/. ではありません: ${p[k]}`);
       if (s.swing && [...p[k]].some((c, slot) => c === 'x' && slot % 2 === 1)) throw new Error(`曲 ${s.id} のパート ${name}（${k}）：シャッフルの曲に16分音符があります`);
     }));
     s.bars = [];

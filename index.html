@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
-<script src="content.js?v=4"></script>
-<script src="data.js?v=2"></script>
+<script src="content.js?v=5"></script>
+<script src="data.js?v=3"></script>
 <script src="billing.js?v=1"></script>
 <script src="timing.js?v=2"></script>
 <script src="assess.js?v=1"></script>
@@ -572,7 +572,8 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
 
     <div class="section-title"><h2>ほかの練習</h2></div>
     <div class="extras">
-      <button type="button" class="tile" data-goto-view="songs"><span class="ic" style="background:#fdece5">🎵</span><span><b>曲で練習する</b><small>オリジナル8曲。4小節ずつ → つなげる → 通しで★を集める。</small></span></button>
+      <button type="button" class="tile" data-goto-view="songs"><span class="ic" style="background:#fdece5">🎵</span><span><b>曲で練習する</b><small>ジャンル別の8曲。4小節ずつ → つなげる → 通しで★を集める。</small></span></button>
+      <button type="button" class="tile" data-goto-view="songs" data-sec="original"><span class="ic" style="background:#fde2e4">🎸</span><span><b>オリジナル曲</b><small>元の曲の音源に合わせて練習。</small></span></button>
       <button type="button" class="tile" data-start="assess"><span class="ic" style="background:#fff1d6">🎯</span><span><b>実力テスト</b><small id="assessLast">1小節ずつ12問・約2分。ドラム譜を読んで叩く力を、レベル1〜10で測ります（無料）</small></span></button>
       <button type="button" class="tile" data-start="flash"><span class="ic" style="background:#fff1d6">⚡</span><span><b>楽器フラッシュ</b><small>出た音符の楽器をすばやく叩く。ドラム譜の位置を覚える練習。</small></span></button>
       <button type="button" class="tile" data-start="weak"><span class="ic" style="background:#dcfce7">🎯</span><span><b>苦手なパターン</b><small>まだクリアしていない・ヒット率の低いパターンを選んで出します。</small></span></button>
@@ -653,8 +654,8 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
 <section id="songsView" class="view" aria-label="曲">
   <div class="page">
     <h1>曲</h1>
-    <p class="lead">オリジナルの8曲。4小節ずつ（テンポ70%）→ 前半・後半をつなげる（80%）→ 通し 60%・80%・100% の順に仕上げます。通しのテンポで★が1〜3つ付きます。</p>
-    <div id="songLib" class="song-grid"></div>
+    <p class="lead">ジャンル別の8曲と、オリジナル曲。4小節ずつ（テンポ70%）→ 前半・後半をつなげる（80%）→ 通し 60%・80%・100% の順に仕上げます。通しのテンポで★が1〜3つ付きます。</p>
+    <div id="songLib"></div>
   </div>
 </section>
 
@@ -943,8 +944,16 @@ const curStep = () => {
   const st = curSong().steps[Math.min(settings.step, curSong().steps.length - 1)];
   return st.locked ? curSong().steps[0] : st;
 };
+// 拍子ごとの数え方（16分音符の歩で数える）。bar: 1小節、beat: カウント・4分のメトロノームの間隔、count: カウントの長さ
+// 6/8 は1小節＝16分12個、付点4分音符（6歩）ごとに数え、カウントは2小節（4つ）
+const meterOf = (time) => (time === '6/8'
+  ? { sig: '6/8', bar: 12, beat: 6, count: 24, num: 6, den: 8 }
+  : { sig: '4/4', bar: 16, beat: 4, count: 16, num: 4, den: 4 });
 // 曲の段階を、叩く小節の並び（0から数える）にしたもの。まとまりの境目も段階の中の位置にする
+// テンポの見せ方：6/8 の曲は付点4分音符の速さで書く（中の計算は4分音符の速さのまま）
+const bpmText = (song, bpm) => (song?.time === '6/8' ? `BPM ${Math.round(bpm / 1.5)}（付点4分）` : `BPM ${bpm}`);
 const songSheet = (song, step) => ({
+  time: song.time,
   barAt: (i) => song.bars[step.start + i],
   passes: step.end - step.start,
   sections: song.sections
@@ -1101,14 +1110,39 @@ const perfOffset = (ctx) => outputOffset(ctx)
   ?? performance.now() - ctx.currentTime * 1000 + (ctx.outputLatency || ctx.baseLatency || 0) * 1000;
 
 // ---- 楽譜の描画 ----
-const DUR = { 1: '16', 2: '8', 3: '8d', 4: 'q', 16: 'w' };
+const DUR = { 1: '16', 2: '8', 3: '8d', 4: 'q', 6: 'qd', 16: 'w' };
 const REST_KEY = { up: 'e/5', down: 'e/4' };
 const COLOR = { perfect: '#16a34a', good: '#e09b00', early: '#2f6fb8', late: '#d9701c', miss: '#e5484d' };
 
-// 拍ごとに区切って、音符と休符の並びにする
-const voiceEvents = (p, voice) => {
+// 6/8 の拍（16分6つ）の中の長さを、書ける長さに分ける（大きい順）
+const splitLen = (len) => {
+  const out = [];
+  let left = len;
+  [6, 4, 3, 2, 1].forEach((d) => { while (left >= d) { out.push(d); left -= d; } });
+  return out;
+};
+// 拍ごとに区切って、音符と休符の並びにする（4/4 は4分音符ごと、6/8 は付点4分音符ごと）
+const voiceEvents = (p, voice, m = meterOf()) => {
   const lanes = INSTS.filter((i) => i.voice === voice && p[i.id]).map((i) => i.id);
   const at = (slot) => lanes.filter((l) => p[l][slot] === 'x');
+  if (m.bar !== 16) {
+    // 6/8：拍の中で、音符は書ける長さの最初の1つにし、残りは休符で埋める
+    const rests = (from, len) => {
+      let x = from;
+      return splitLen(len).map((d) => { const r = { rest: true, len: d, slot: x }; x += d; return r; });
+    };
+    return [...Array(m.bar / m.beat).keys()].flatMap((b) => {
+      const s0 = b * m.beat;
+      const on = [...Array(m.beat).keys()].filter((s) => at(s0 + s).length);
+      if (!on.length) return rests(s0, m.beat);
+      const lead = on[0] ? rests(s0, on[0]) : [];
+      return [...lead, ...on.flatMap((s, i) => {
+        const len = (on[i + 1] ?? m.beat) - s;
+        const d = splitLen(len)[0];
+        return [{ rest: false, len: d, slot: s0 + s, lanes: at(s0 + s) }, ...rests(s0 + s + d, len - d)];
+      })];
+    });
+  }
   if (![...Array(16).keys()].some((s) => at(s).length)) return [{ rest: true, len: 16, slot: 0 }];
   return [0, 1, 2, 3].flatMap((b) => {
     const on = [0, 1, 2, 3].filter((s) => at(b * 4 + s).length);
@@ -1139,7 +1173,7 @@ let geom = null; // { bars: Map(何小節目 → { timeline: [[slot, x]], top, b
 const ROW_H = 150;
 
 // bars: [{ p: 1小節のパターン, abs: 演奏の中で何小節目か, pos: 置く位置（省略時は並び順）}] を、1段に perRow 小節ずつ並べて描く
-const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null) => {
+const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null, m = meterOf()) => {
   const el = $('score');
   el.innerHTML = '';
   const w = Math.max(320, Math.floor(el.clientWidth));
@@ -1155,7 +1189,7 @@ const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null) => {
     const col = posOf(bar, i) % perRow;
     const stave = new VF.Stave(4 + col * bw, 24 + row * ROW_H, bw);
     if (col === 0) stave.addClef('percussion');
-    if (timeAt(abs, i)) stave.addTimeSignature('4/4');
+    if (timeAt(abs, i)) stave.addTimeSignature(m.sig);
     stave.setContext(ctx).draw();
     // まとまりの名前（イントロ・サビなど）は、そのまとまりの最初の小節の左上に書く
     const label = labelAt(abs);
@@ -1166,14 +1200,15 @@ const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null) => {
       ctx.fillText(label, stave.getX() + 4, stave.getYForLine(0) - 26);
       ctx.restore();
     }
-    const built = ['up', 'down'].map((v) => voiceEvents(p, v).map((ev) => makeNote(ev, v)));
+    const built = ['up', 'down'].map((v) => voiceEvents(p, v, m).map((ev) => makeNote(ev, v)));
     built.flat().forEach((n) => n.lanes.forEach((l, k) => {
       const c = colorOf(abs, n.slot, l);
       if (c) n.note.setKeyStyle(k, { fillStyle: c, strokeStyle: c });
     }));
-    const voices = built.map((ns) => new VF.Voice({ num_beats: 4, beat_value: 4 }).addTickables(ns.map((n) => n.note)));
+    const voices = built.map((ns) => new VF.Voice({ num_beats: m.num, beat_value: m.den }).addTickables(ns.map((n) => n.note)));
+    // 連桁は 4/4 は4分音符ごと、6/8 は付点4分音符（8分3つ）ごと
     const beams = built.flatMap((ns, vi) => VF.Beam.generateBeams(ns.map((n) => n.note), {
-      groups: [new VF.Fraction(1, 4)], stem_direction: vi === 0 ? 1 : -1, beam_rests: false,
+      groups: [m.bar === 16 ? new VF.Fraction(1, 4) : new VF.Fraction(3, 8)], stem_direction: vi === 0 ? 1 : -1, beam_rests: false,
     }));
     new VF.Formatter().joinVoices(voices).formatToStave(voices, stave);
     voices.forEach((v) => v.draw(ctx, stave));
@@ -1184,7 +1219,7 @@ const drawBars = (bars, colorOf, perRow, timeAt, labelAt = () => null) => {
       xs.set(n.slot, Math.min(xs.get(n.slot) ?? Infinity, x));
     });
     const timeline = [...xs].sort((a, b) => a[0] - b[0]);
-    timeline.push([16, stave.getNoteEndX() - 4]);
+    timeline.push([m.bar, stave.getNoteEndX() - 4]);
     geom.bars.set(abs, { timeline, top: stave.getYForLine(0) - 22, bottom: stave.getYForLine(4) + 22 });
   });
 };
@@ -1258,7 +1293,8 @@ const sheetNow = () => view ?? (settings.mode === 'song'
 const windowBars = () => {
   const sh = sheetNow();
   const cur = view ? view.displayPass : 0;
-  if (!sh.sections) return { bars: [{ p: sh.barAt(cur), abs: cur }], perRow: 1, timeAt: (abs, i) => i === 0 };
+  const m = meterOf(sh.time);
+  if (!sh.sections) return { bars: [{ p: sh.barAt(cur), abs: cur }], perRow: 1, timeAt: (abs, i) => i === 0, m };
   const per = perRowNow();
   const row = Math.floor(cur / per);
   // 段 r は上（偶数）か下（奇数）の決まった位置に出す。曲の最後で次の段が無いときは空ける
@@ -1266,7 +1302,7 @@ const windowBars = () => {
   const bars = rows.flatMap((r, ri) => Array.from({ length: per }, (_, i) => ({ abs: r * per + i, pos: ri * per + i })))
     .filter(({ abs }) => abs < sh.passes)
     .map(({ abs, pos }) => ({ p: sh.barAt(abs), abs, pos }));
-  return { bars, perRow: per, timeAt: (abs) => abs === 0, labelAt: (abs) => sh.sections.find((s) => s.start === abs)?.name };
+  return { bars, perRow: per, timeAt: (abs) => abs === 0, labelAt: (abs) => sh.sections.find((s) => s.start === abs)?.name, m };
 };
 
 const renderMarks = () => {
@@ -1278,7 +1314,7 @@ const renderMarks = () => {
     if (!g) return;
     const m = document.createElement('div');
     m.className = 'extra-mark';
-    m.style.left = `${slotToX(g, Math.min(15.99, Math.max(0, e.slotF)))}px`;
+    m.style.left = `${slotToX(g, Math.min(meterOf(view.time).bar - 0.01, Math.max(0, e.slotF)))}px`;
     m.style.top = `${g.top - 8}px`;
     box.append(m);
   });
@@ -1289,8 +1325,8 @@ const render = () => {
     if (flash) drawSingle($('score'), flash.inst, flash.color, 170, 150, true, true);
     geom = null;
   } else {
-    const { bars, perRow, timeAt, labelAt } = windowBars();
-    drawBars(bars, colorOf, perRow, timeAt, labelAt);
+    const { bars, perRow, timeAt, labelAt, m } = windowBars();
+    drawBars(bars, colorOf, perRow, timeAt, labelAt, m);
   }
   renderMarks();
 };
@@ -1320,7 +1356,7 @@ const ensureTargets = (r, pass) => {
   r.made.add(pass);
   const bar = r.barAt(pass);
   lanesOf(bar).forEach((lane) => [...bar[lane]].forEach((c, slot) => {
-    if (c === 'x') r.targets.push({ pass, slot, lane, inst: r.calib ? 'any' : lane, rel: (16 + pass * 16 + slotPos(r, slot)) * r.s16, result: null, offset: null });
+    if (c === 'x') r.targets.push({ pass, slot, lane, inst: r.calib ? 'any' : lane, rel: (r.m.count + pass * r.m.bar + slotPos(r, slot)) * r.s16, result: null, offset: null });
   }));
 };
 
@@ -1330,13 +1366,14 @@ const schedule = (r) => {
     const t = r.startAudio + (r.k * r.s16) / 1000;
     const k = r.k;
     r.k += 1;
-    if (k < 16) { if (k % 4 === 0) click(t, k === 0 ? 2 : 1); continue; }
-    const slot = (k - 16) % 16;
-    const pass = Math.floor((k - 16) / 16);
+    const M = r.m;
+    if (k < M.count) { if (k % M.beat === 0) click(t, k % M.bar === 0 ? 2 : 1); continue; }
+    const slot = (k - M.count) % M.bar;
+    const pass = Math.floor((k - M.count) / M.bar);
     if (slot === 0) ensureTargets(r, pass + 1);
     const ts = t + ((slotPos(r, slot) - slot) * r.s16) / 1000;
-    if (r.metro === '4' && slot % 4 === 0) click(t, slot === 0 ? 2 : 1);
-    if (r.metro === '8' && slot % 2 === 0) click(ts, slot === 0 ? 2 : slot % 4 === 0 ? 1 : 0);
+    if (r.metro === '4' && slot % M.beat === 0) click(t, slot === 0 ? 2 : 1);
+    if (r.metro === '8' && slot % 2 === 0) click(ts, slot === 0 ? 2 : slot % M.beat === 0 ? 1 : 0);
     if (r.demo) {
       const bar = r.barAt(pass);
       lanesOf(bar).forEach((l) => { if (bar[l][slot] === 'x') playDrum(l, ts); });
@@ -1355,16 +1392,17 @@ const frame = () => {
     r.offset = median(r.offSamples);
   }
   const b = base(r);
-  const pos = (now - b) / r.s16 - 16;
+  const M = r.m;
+  const pos = (now - b) / r.s16 - M.count;
   if (pos < 0) {
-    const beat = Math.floor((pos + 16) / 4) + 1;
+    const beat = Math.floor((pos + M.count) / M.beat) + 1;
     setCount(beat >= 1 ? `${beat} <small>${r.calib ? 'クリックに合わせて叩く' : 'カウント'}</small>` : '');
     $('playhead').hidden = true;
   } else {
-    const pass = Math.floor(pos / 16);
+    const pass = Math.floor(pos / M.bar);
     if (pass < r.passes) {
       if (pass !== r.displayPass) { r.displayPass = pass; markDirty(); if (r.loopLen && pass > 0 && pass % r.loopLen === 0) lapReport(r, pass); }
-      $('playProg').style.width = `${Number.isFinite(r.passes) ? Math.min(100, (pos / (r.passes * 16)) * 100) : 100}%`;
+      $('playProg').style.width = `${Number.isFinite(r.passes) ? Math.min(100, (pos / (r.passes * M.bar)) * 100) : 100}%`;
       const pp = r.loopLen ? pass % r.loopLen : pass;
       const sec = r.sections?.find((s) => pp >= s.start && pp < s.end);
       const where = `${pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目${sec ? `・${sec.name}` : ''}</small>`;
@@ -1373,7 +1411,7 @@ const frame = () => {
       const ph = $('playhead');
       if (g) {
         ph.hidden = false;
-        ph.style.left = `${slotToX(g, pos % 16)}px`;
+        ph.style.left = `${slotToX(g, pos % M.bar)}px`;
         ph.style.top = `${g.top}px`;
         ph.style.height = `${g.bottom - g.top}px`;
       } else {
@@ -1440,11 +1478,13 @@ const startRun = async ({ demo = false, calib = false, assess = false } = {}) =>
   if (!demo && !calib && !assess && practice().wait) { startWait(sheet); return; }
   const pattern = calib ? CALIB_PATTERN : assess ? assessRun.pattern : song ? null : currentPattern();
   const bpm = calib ? settings.bpm : assess ? ASSESS_BPM : playBpm();
-  const s16 = 60000 / bpm / 4;
+  const s16 = 60000 / bpm / 4; // bpm は4分音符の速さ（6/8 の曲も同じ）
   const passes = calib ? 4 : assess ? 1 : sheet ? sheet.passes : demo ? 1 : passesOf();
+  const m = meterOf(song?.time);
   run = {
     pattern, song, step, swing: !!song?.swing, barAt: sheet ? sheet.barAt : () => pattern, sections: sheet ? sheet.sections : null,
-    demo, calib, s16, passes, bpm, total: 16 + passes * 16, k: 0, startedAt: performance.now(),
+    time: song?.time, m,
+    demo, calib, s16, passes, bpm, total: m.count + passes * m.bar, k: 0, startedAt: performance.now(),
     startAudio: ctx.currentTime + 0.3, offset: perfOffset(ctx), offSamples: [],
     targets: [], extras: [], made: new Set(), displayPass: 0, metro: calib ? '4' : settings.metro,
     loopLen: sheet?.loopLen ?? 0, practice: !!song && !demo && (practice().speed < 100 || !!sheet?.loopLen), assess,
@@ -1537,14 +1577,15 @@ const judgeHit = (r, inst, tRaw) => {
   const t = r.calib ? tRaw : tRaw - settings.latency;
   const w = r.calib ? CALIB_WIN : win();
   const b = base(r);
-  if (t < b + 16 * r.s16 - w.good) return; // カウント中
+  if (t < b + r.m.count * r.s16 - w.good) return; // カウント中
   const dist = (x) => Math.abs(t - (b + x.rel));
   const cand = r.targets
     .filter((x) => x.result === null && sameInst(x.inst, inst) && dist(x) <= w.good)
     .sort((x, y) => dist(x) - dist(y))[0];
   if (!cand) {
-    const pos = (t - b) / r.s16 - 16;
-    r.extras.push({ inst, pass: Math.floor(pos / 16), slotF: pos - Math.floor(pos / 16) * 16 });
+    const pos = (t - b) / r.s16 - r.m.count;
+    const bl = r.m.bar;
+    r.extras.push({ inst, pass: Math.floor(pos / bl), slotF: pos - Math.floor(pos / bl) * bl });
     setFeedback('ng', `余分：${INST[inst].name}`);
     markDirty();
     updateLiveScore(r);
@@ -1618,7 +1659,7 @@ const finishRun = () => {
   r.targets = r.targets.filter((x) => x.result !== null || b + x.rel + w.good < nowC);
   r.targets.forEach((x) => { if (x.result === null) x.result = 'miss'; });
   if (r.calib) { finishCalib(r); return; }
-  const played = Math.max(0, Math.min(r.passes, Math.floor((nowC - b - 16 * r.s16 + w.good) / (16 * r.s16))));
+  const played = Math.max(0, Math.min(r.passes, Math.floor((nowC - b - r.m.count * r.s16 + w.good) / (r.m.bar * r.s16))));
   if (!r.targets.length) {
     view = null;
     render();
@@ -1680,7 +1721,7 @@ const showResult = (r, s, cleared) => {
   el.innerHTML = `${charaImg(!cleared ? 'cheer' : r.song && r.step.stars && r.step.stars < 3 ? 'happy' : 'celebrate', 'chara-result')}${top}
     <h2>${r.practice ? '練習の結果' : cleared ? 'クリア！' : s.rate >= 0.7 ? 'あと少し' : 'もう一度'}</h2>
     <div class="rate"><small class="sub">ヒット率</small><b>${Math.round(s.rate * 100)}%</b></div>
-    <p class="sub">${r.practice ? `練習モード（速さ ${practice().speed}%${r.loopLen ? '・繰り返し' : ''}）なので、クリアの記録には入りません・BPM ${r.bpm}` : `クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・BPM ${r.bpm}`}</p>
+    <p class="sub">${r.practice ? `練習モード（速さ ${practice().speed}%${r.loopLen ? '・繰り返し' : ''}）なので、クリアの記録には入りません・${bpmText(r.song, r.bpm)}` : `クリアは${CLEAR_RATE * 100}%以上${r.song ? '・最後まで' : ''}・${bpmText(r.song, r.bpm)}`}</p>
     <div class="counts"><span class="p">Perfect ${s.perfect}</span><span class="g">Good ${s.good}</span><span class="m">Miss ${s.miss}</span><span class="m">余分 ${s.extra}</span></div>
     ${s.mean !== null ? `<p>平均のずれ <b>${signed(s.mean)}</b>（${tendency(s.mean)}）${s.sd !== null ? `・ばらつき ±${Math.round(s.sd)}ms` : ''}</p>` : ''}
     ${missLanes.length ? `<p class="sub">ミスがあった楽器：${missLanes.map((l) => INST[l].name).join('、')}</p>` : ''}
@@ -1728,7 +1769,7 @@ const loopSheet = (sheet) => {
   const a = secs[from].start;
   const len = secs[to].end - a;
   return {
-    barAt: (i) => sheet.barAt(a + (i % len)), passes: Infinity, loopLen: len,
+    time: sheet.time, barAt: (i) => sheet.barAt(a + (i % len)), passes: Infinity, loopLen: len,
     sections: secs.slice(from, to + 1).map((x) => ({ name: x.name, start: x.start - a, end: x.end - a })),
   };
 };
@@ -1745,7 +1786,7 @@ const startWait = (sheet) => {
   const song = settings.mode === 'song' ? curSong() : null;
   const pattern = song ? null : currentPattern();
   run = {
-    wait: true, song, step: song ? curStep() : null, pattern, barAt: sheet ? sheet.barAt : () => pattern,
+    wait: true, song, step: song ? curStep() : null, pattern, barAt: sheet ? sheet.barAt : () => pattern, time: song?.time, m: meterOf(song?.time),
     sections: sheet ? sheet.sections : null, passes: sheet ? sheet.passes : passesOf(), loopLen: sheet?.loopLen ?? 0,
     targets: [], extras: [], made: new Set(), displayPass: 0, pass: 0, slot: -1, moment: null,
     firstTry: 0, moments: 0, lapMark: { moments: 0, firstTry: 0 }, startedAt: performance.now(), practice: true, demo: false, calib: false,
@@ -1789,7 +1830,7 @@ const waitAdvance = (r) => {
       r.displayPass = r.pass;
       markDirty();
       setCount(`${r.pass + 1}${Number.isFinite(r.passes) ? ` / ${r.passes}` : ''} <small>小節目・待つ</small>`);
-      if (Number.isFinite(r.passes)) $('playProg').style.width = `${((r.pass + r.slot / 16) / r.passes) * 100}%`;
+      if (Number.isFinite(r.passes)) $('playProg').style.width = `${((r.pass + r.slot / r.m.bar) / r.passes) * 100}%`;
       return;
     }
     r.pass += 1;
@@ -2142,7 +2183,7 @@ const renderSongBars = () => {
   $('stepBar').innerHTML = song.steps.map((st, i) => {
     if (st.locked) return `<button type="button" data-step="${i}" aria-pressed="false" class="locked" title="${st.label}（有料版）">🔒 ${st.short}</button>`;
     const done = rec?.steps?.[st.key]?.cleared;
-    return `<button type="button" data-step="${i}" aria-pressed="${i === settings.step}" class="${done ? 'done' : ''}" title="${st.label}・BPM ${stepBpm(song, st)}${done ? '（クリア済み）' : ''}">${st.short}</button>`;
+    return `<button type="button" data-step="${i}" aria-pressed="${i === settings.step}" class="${done ? 'done' : ''}" title="${st.label}・${bpmText(song, stepBpm(song, st))}${done ? '（クリア済み）' : ''}">${st.short}</button>`;
   }).join('');
   scrollPressedIntoView($('stepBar'));
 };
@@ -2189,7 +2230,7 @@ const renderInfo = () => {
     const step = curStep();
     const st = progress.songs[song.id]?.steps?.[step.key];
     const recText = st ? `最高 ${Math.round(st.best * 100)}%${st.cleared ? '・クリア済み' : ''}` : 'まだ叩いていません';
-    $('stageInfo').innerHTML = `<b>${step.label}</b>　BPM ${stepBpm(song, step)}・${step.end - step.start}小節${song.swing ? '・はねる' : ''}　${recText}<br>${song.desc}`;
+    $('stageInfo').innerHTML = `<b>${step.label}</b>　${bpmText(song, stepBpm(song, step))}・${step.end - step.start}小節${song.time === '6/8' ? '・8分の6拍子' : ''}${song.swing ? '・はねる' : ''}　${recText}<br>${song.desc}`;
     return;
   }
   const st = STAGES[settings.stage];
@@ -2471,7 +2512,7 @@ const renderContinue = () => {
     const step = curStep();
     el.innerHTML =
       `<span class="kicker">つづきから　♪ 曲</span><h2>${song.title}</h2>` +
-      `<p>${step.label}・BPM ${stepBpm(song, step)}</p>` +
+      `<p>${step.label}・${bpmText(song, stepBpm(song, step))}</p>` +
       `<span class="stars-line">${starText(songStars(song, progress.songs[song.id]))}</span>` +
       '<button type="button" class="big" data-continue>▶ 練習を続ける</button>';
     return;
@@ -2561,18 +2602,26 @@ const COVERS = [
 ];
 const DRUM_GLYPH = '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="40" rx="22" ry="9" fill="#fff" opacity=".55"/><rect x="10" y="30" width="44" height="10" fill="#fff" opacity=".55"/><ellipse cx="32" cy="30" rx="22" ry="8.5" fill="#fff"/><path d="M16 8l13 18M50 10L36 26" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>';
 
+// 曲の欄：ジャンル別の練習曲と、オリジナル曲（original: true。元の曲の音源つき）を分ける
+const SONG_SECTIONS = [['genre', 'ジャンル別の曲', ''], ['original', 'オリジナル曲', '元の曲の音源に合わせて練習']];
 const renderSongLib = () => {
-  $('songLib').innerHTML = SONGS.map((s, i) => {
+  const card = (s, i) => {
     const [c1, c2] = COVERS[i % COVERS.length];
     const n = songStars(s, progress.songs[s.id]);
     const diff = songDifficulty(s);
     const done = songCleared(s);
     return `<button type="button" class="song-card" data-song="${s.id}">` +
-      `<span class="cover" style="background:linear-gradient(135deg, ${c1}, ${c2})">${s.title.includes(s.genre) ? '' : `<span class="tag">${s.genre}</span>`}<span class="tag bpm-tag">BPM ${s.tempo}${s.swing ? '・はねる' : ''}</span><span class="glyph">${DRUM_GLYPH}</span>${s.locked ? `<span class="lock-tag">🔒 ${s.sectionNames[0]}だけ無料</span>` : ''}</span>` +
+      `<span class="cover" style="background:linear-gradient(135deg, ${c1}, ${c2})">${s.title.includes(s.genre) ? '' : `<span class="tag">${s.genre}</span>`}<span class="tag bpm-tag">${bpmText(s, s.tempo)}${s.time === '6/8' ? '・6/8' : ''}${s.swing ? '・はねる' : ''}</span><span class="glyph">${DRUM_GLYPH}</span>${s.locked ? `<span class="lock-tag">🔒 ${s.sectionNames[0]}だけ無料</span>` : ''}</span>` +
       `<span class="song-meta"><b>${s.title}</b><small>${s.fullBars}小節・${s.sectionNames.join(' → ')}</small>` +
       `<span class="row"><span class="diff" title="難しさ ${diff}/5" aria-label="難しさ ${diff}/5">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= diff ? 'on' : ''}"></i>`).join('')}</span>` +
       `<span class="got" aria-label="★${n}">${starText(n)}</span></span>` +
       `<span class="bar" title="${done} / ${s.steps.length} 段階クリア"><i style="width:${(done / s.steps.length) * 100}%"></i></span></span></button>`;
+  };
+  $('songLib').innerHTML = SONG_SECTIONS.map(([key, label, note]) => {
+    const list = SONGS.map((s, i) => [s, i]).filter(([s]) => (s.original ? 'original' : 'genre') === key);
+    if (!list.length) return '';
+    return `<div class="section-title" id="songs-${key}"><h2>${label}</h2><span>${list.length}曲${note ? `・${note}` : ''}</span></div>`
+      + `<div class="song-grid">${list.map(([s, i]) => card(s, i)).join('')}</div>`;
   }).join('');
 };
 
@@ -2605,7 +2654,10 @@ const initUI = () => {
     const go = t.closest('[data-goto-view]');
     if (go) {
       e.preventDefault();
-      return showView(go.dataset.gotoView);
+      showView(go.dataset.gotoView);
+      const sec = go.dataset.sec ? $(`songs-${go.dataset.sec}`) : null;
+      if (sec) sec.scrollIntoView({ block: 'start' });
+      return;
     }
     if (t.closest('[data-continue]')) return showView('play');
     const pw = t.closest('[data-paywall]');
