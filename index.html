@@ -14,12 +14,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
-<script src="content.js?v=3"></script>
+<script src="content.js?v=4"></script>
 <script src="data.js?v=2"></script>
 <script src="billing.js?v=1"></script>
 <script src="timing.js?v=2"></script>
 <script src="assess.js?v=1"></script>
 <script src="studio.js?v=1"></script>
+<script src="mixer.js?v=1"></script>
+<script src="demo.js?v=1"></script>
 <style>
 /* ---- デザインの基本（色・文字・角の丸み）：読譜トレーナーと同じ作り。ドラムは赤橙が基調 ---- */
 :root {
@@ -359,6 +361,8 @@ body[data-mode="flash"] #score svg { width: 100%; height: auto; }
 .result .counts .g { color: var(--gold-dark); }
 .result .counts .m { color: var(--ng); }
 .result .controls { margin-top: 10px; }
+.song-mixer { width: 100%; max-width: 760px; margin-top: 6px; text-align: left; }
+.song-mixer h3 { margin: 0 0 8px; font-size: .95rem; }
 .stage .result .controls button.ghost { background: var(--paper); color: var(--accent); box-shadow: 0 0 0 2px var(--line) inset, 0 3px 0 var(--line); }
 .stage .result .controls button.ghost:hover:not(:disabled) { background: var(--accent-soft); }
 .stars { font-size: 3rem; line-height: 1; letter-spacing: .12em; }
@@ -635,6 +639,7 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
         <button id="prevStepBtn" class="ghost small" type="button">← 前の段階</button>
         <button id="nextStepBtn" class="ghost small" type="button">次の段階 →</button>
       </div>
+      <div id="songMixerBox" class="song-mixer only-song" hidden><h3>元の曲（パート別の音量）</h3><div id="songMixer"></div></div>
       <div class="controls only-flash">
         <button id="skipBtn" class="ghost" type="button">答えを見て次へ</button>
       </div>
@@ -1393,7 +1398,7 @@ const frame = () => {
 const setRunningUI = (on) => {
   practiceUI?.disable(on);
   $('startBtn').hidden = on;
-  $('stopBtn').hidden = !on;
+  $('stopBtn').hidden = !on || !!run?.demo;
   $('demoBtn').disabled = on;
   $('calibBtn').disabled = on;
 };
@@ -1460,6 +1465,49 @@ const startRun = async ({ demo = false, calib = false, assess = false } = {}) =>
   schedule(run);
   run.timer = setInterval(() => run && schedule(run), 25);
   run.raf = requestAnimationFrame(frame);
+  if (demo) {
+    pauseSongMixer();
+    // お手本のボタンを「一時停止」「停止」に入れ替える（demo.js）
+    run.demoCtl = Demo.bind($('demoBtn'), { pause: pauseDemoRun, resume: resumeDemoRun, stop: stopDemoRun });
+  } else {
+    stopSongMixer(); // 練習はクリックとパッドの音で叩くので、元の曲は止める
+  }
+};
+
+// ---- お手本の一時停止・再開・停止 ----
+// 一時停止は AudioContext を止める（先に予約した0.15秒ぶんの音も止まったまま待つ）。
+// 再開したら、止まっていたあいだの分だけ、音の時刻（startAudio）と画面の時刻の対応（offset）をずらして続ける
+const pauseDemoRun = () => {
+  const r = run;
+  if (!r?.demo || r.pausedAt) return;
+  clearInterval(r.timer);
+  cancelAnimationFrame(r.raf);
+  r.pausedAt = { audio: actx.currentTime, perf: performance.now() };
+  actx.suspend().catch((e) => console.warn('お手本を一時停止できませんでした', e));
+};
+const resumeDemoRun = async () => {
+  const r = run;
+  if (!r?.demo || !r.pausedAt) return;
+  try {
+    await actx.resume();
+  } catch (e) {
+    setFeedback('ng', `音を鳴らせません: ${e.message}`);
+    return;
+  }
+  if (run !== r) return; // 待っているあいだに止められた
+  const dA = actx.currentTime - r.pausedAt.audio; // 止まっていたあいだに進んだ音の時刻（ふつうは0。パッドを叩くと進む）
+  const dP = performance.now() - r.pausedAt.perf;
+  r.startAudio += dA;
+  r.offset += dP - dA * 1000;
+  r.offSamples = [];
+  r.pausedAt = null;
+  r.timer = setInterval(() => run && schedule(run), 25);
+  r.raf = requestAnimationFrame(frame);
+};
+const stopDemoRun = () => {
+  if (!run?.demo) return;
+  cancelRun();
+  render();
 };
 
 const stopTimers = (r) => {
@@ -1474,6 +1522,11 @@ const stopTimers = (r) => {
 const cancelRun = () => {
   if (!run) return;
   stopTimers(run);
+  if (run.demo) {
+    run.demoCtl?.done();
+    // 一時停止のまま止めたら、AudioContext を動かし直す（パッドの音が出なくならないように）
+    if (run.pausedAt) actx.resume().catch((e) => console.warn('音を出せません', e));
+  }
   run = null;
   view = null;
 };
@@ -1551,7 +1604,13 @@ const finishRun = () => {
   if (!r) return;
   stopTimers(r);
   run = null;
-  if (r.demo) { view = null; render(); return; }
+  if (r.demo) {
+    r.demoCtl?.done();
+    if (r.pausedAt) actx.resume().catch((e) => console.warn('音を出せません', e));
+    view = null;
+    render();
+    return;
+  }
   const w = r.calib ? CALIB_WIN : win();
   const nowC = performance.now() - (r.calib ? 0 : settings.latency);
   const b = base(r);
@@ -2095,9 +2154,32 @@ const syncBpmUI = () => {
   ['bpmInput', 'bpmDown', 'bpmUp'].forEach((id) => { $(id).disabled = fixed; });
 };
 
+// ---- 元の曲（パート別の音量）：曲に stems（Suno の音源をパートに分けたもの）があるときだけ、mixer.js のプレーヤーを出す ----
+let songMixer = null; // { id, mx }
+const closeSongMixer = () => {
+  if (songMixer) songMixer.mx.destroy();
+  songMixer = null;
+  $('songMixerBox').hidden = true;
+};
+const stopSongMixer = () => { if (songMixer) songMixer.mx.stop(); };
+const pauseSongMixer = () => { if (songMixer) songMixer.mx.pause(); };
+const syncSongMixer = () => {
+  const song = settings.mode === 'song' ? curSong() : null;
+  if (songMixer && song && songMixer.id === song.id) return;
+  closeSongMixer();
+  if (!song?.stems) return;
+  $('songMixerBox').hidden = false;
+  songMixer = { id: song.id, mx: Mixer.create($('songMixer'), { id: song.id, ...song.stems, mine: 'drums' }) };
+};
+// 元の曲を再生したら、お手本は止める（2つの音を重ねない）
+$('songMixer').addEventListener('click', (e) => {
+  if (e.target instanceof Element && e.target.closest('[data-mx="play"]')) Demo.stop();
+});
+
 const renderInfo = () => {
   renderPractice();
   syncBpmUI();
+  syncSongMixer();
   if (settings.mode === 'flash') {
     $('stageInfo').textContent = '出た音符の楽器を叩きます。まちがえやすい楽器ほど多く出ます。';
     return;
@@ -2326,6 +2408,7 @@ const showView = (v) => {
   if (prev === 'play' && v !== 'play') {
     cancelRun();
     clearTimeout(nextFlash.timer);
+    stopSongMixer();
   }
   document.body.dataset.view = v;
   document.querySelectorAll('.tabs button[data-tab]').forEach((b) => {
