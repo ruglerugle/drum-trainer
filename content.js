@@ -727,5 +727,116 @@ const SONGS = [
   "locked": true,
   "odd": 0.375,
   "fullBars": 16
+ },
+ {
+  "id": "cp-shuden-no-atode",
+  "title": "終電のあとで",
+  "genre": "シティポップ",
+  "original": true,
+  "tempo": 128,
+  "desc": "オリジナル曲。ニ短調のシティポップ（♩=128）。メジャーセブンス・テンションの効いたコードの上の、夜の街の歌。16分のハイハット・シンコペーションのキック・フィルイン",
+  "parts": {
+   "A": {
+    "hh": "......x.x.x.x.x.",
+    "bd": "........x.......",
+    "sd": "............x..."
+   },
+   "B": {
+    "bd": "x.....x.x.......",
+    "hh": "x.x.x.x.x.x.....",
+    "sd": "....x.......xx..",
+    "t2": "..............xx"
+   },
+   "C": {
+    "bd": "x.....x...x.x...",
+    "hh": "x.x.x.x.x.x.x.x.",
+    "sd": "...xx......xx..."
+   },
+   "D": {
+    "bd": "x......xx.....x.",
+    "hh": "x.x.x.x.x.x.x...",
+    "sd": "...xx......xxx..",
+    "t2": "..............xx"
+   }
+  },
+  "form": [
+   {
+    "name": "イントロ",
+    "bars": "A B C D"
+   },
+   {
+    "name": "Aメロ",
+    "bars": ""
+   },
+   {
+    "name": "サビ",
+    "bars": ""
+   },
+   {
+    "name": "間奏",
+    "bars": ""
+   },
+   {
+    "name": "ラストのサビ",
+    "bars": ""
+   }
+  ],
+  "stems": {
+   "base": "audio/songs/cp-shuden-no-atode/",
+   "tracks": [
+    {
+     "id": "vocal",
+     "label": "歌"
+    },
+    {
+     "id": "keys",
+     "label": "鍵盤"
+    },
+    {
+     "id": "guitar",
+     "label": "ギター"
+    },
+    {
+     "id": "bass",
+     "label": "ベース"
+    },
+    {
+     "id": "drums",
+     "label": "ドラム"
+    }
+   ],
+   "bar1": 0,
+   "spb": 0.46875,
+   "sections": [
+    {
+     "name": "イントロ",
+     "from": 0,
+     "to": 4
+    },
+    {
+     "name": "Aメロ",
+     "from": 4,
+     "to": 12
+    },
+    {
+     "name": "サビ",
+     "from": 12,
+     "to": 20
+    },
+    {
+     "name": "間奏",
+     "from": 20,
+     "to": 24
+    },
+    {
+     "name": "ラストのサビ",
+     "from": 24,
+     "to": 32
+    }
+   ]
+  },
+  "locked": true,
+  "odd": 0.969,
+  "fullBars": 32
  }
 ];
