@@ -846,7 +846,7 @@ const SONGS = [
      },
      {
       "id": "original-keys",
-      "label": "鍵盤・その他",
+      "label": "鍵盤",
       "part": "keys"
      },
      {
@@ -863,6 +863,10 @@ const SONGS = [
       "id": "original-drums",
       "label": "ドラム",
       "part": "drums"
+     },
+     {
+      "id": "original-other",
+      "label": "その他"
      }
     ]
    }
