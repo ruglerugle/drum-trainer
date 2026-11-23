@@ -515,6 +515,79 @@ button.gold:active:not(:disabled) { box-shadow: 0 0 0 var(--gold-dark); }
 @media (prefers-reduced-motion: reduce) {
   .stars span.on, .node.next .dot, .result, dialog.sheet-dlg[open], .result .badge-clear { animation: none; }
 }
+/* 練習の画面：楽譜とパッドを、スクロールせずに一画面に収める（#5）。
+   パッドを楽譜・スタートのすぐ下に並べ替え（前・次の切り替えや説明はパッドの下へ）、
+   高さが足りないときは見出し・説明などの飾りを先に縮め、楽譜とパッドは読める・押せる大きさを保つ。
+   曲の楽譜（2段）は、高さが足りないときだけ楽譜の枠ごと縮める（再生位置の線も一緒に縮むので位置はずれない） */
+.stage > .pads { order: 1; }
+.stage > #lapLine, .stage > #tmeter, .stage > .controls.only-pattern, .stage > .controls.only-song,
+.stage > #songMixerBox, .stage > .kb-note { order: 2; }
+body[data-mode="song"] .score-wrap { zoom: var(--song-zoom, 1); }
+@media (max-height: 800px) {
+  body { --song-zoom: .8; }
+  .play { padding-top: 4px; padding-bottom: 16px; }
+  .playbar { padding: 0 0 6px; }
+  .stage { gap: 6px; }
+  .chip-bar { padding-bottom: 4px; }
+  .stage-info { font-size: .8rem; line-height: 1.35; }
+  .legend-dots { font-size: .72rem; gap: 10px; }
+  .status-line { min-height: 0; }
+  .count { font-size: 1.3rem; }
+  .stage > .controls.only-play button.big { padding: 8px 22px; font-size: 1rem; }
+  .stage > .kb-note { display: none; }
+  .pads { max-width: 420px; gap: 6px; padding: 8px 10px; margin-top: 0; border-radius: 18px; }
+  button.pad { font-size: .74rem; }
+}
+/* スマートフォンの縦：パッドを少し小さく（1つ 50px 前後）、曲の楽譜をもう少し縮める */
+@media (max-height: 800px) and (max-width: 599px) {
+  body { --song-zoom: .62; }
+  .pads { max-width: 310px; }
+  button.pad { font-size: .66rem; }
+  /* 説明は1行目（題名・記録）だけにする */
+  .stage-info { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+  #practiceBar { row-gap: 4px; }
+  .pr-sp button { padding: 3px 7px; }
+  .pr-tg { padding: 2px 8px; }
+  .score-wrap { padding-top: 6px; }
+  /* スタート・お手本・テンポを1行に */
+  .stage > .controls.only-play { gap: 6px; }
+  .stage > .controls.only-play button.big { padding: 8px 14px; }
+  .stage > .controls.only-play #demoBtn { padding: 8px 10px; font-size: .9rem; }
+  .stage .bpm button.ghost { width: 32px; height: 32px; }
+  .bpm input { width: 2.6em; padding: 4px 0; }
+  .bpm span { padding-right: 4px; font-size: .7rem; }
+  button.pad kbd { display: none; }
+}
+/* 横に長い画面（iPhone の横・高さの低い PC）：楽譜を左、スタート（とテンポ）とパッドを右の列に上から並べる */
+@media (max-height: 700px) and (min-width: 600px) {
+  .stage { grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 6px 12px; align-items: center; }
+  .stage > * { grid-column: 1 / -1; }
+  .stage > .score-wrap { grid-column: 1; grid-row: span 2; }
+  .stage > .pads { grid-column: 2; max-width: 320px; padding: 6px 8px; gap: 4px 6px; }
+  .stage > .controls.only-play { grid-column: 2; order: 1; align-self: start; }
+  .stage > .controls.only-play { gap: 6px; }
+  .stage > .legend-dots, .stage > .status-line, .stage > .controls.only-flash { order: 2; }
+  .stage > #lapLine, .stage > #tmeter, .stage > .controls.only-pattern, .stage > .controls.only-song,
+  .stage > #songMixerBox, .stage > .kb-note { order: 3; }
+  button.pad { font-size: .66rem; }
+  button.pad kbd { display: none; }
+}
+@media (max-height: 520px) and (min-width: 600px) {
+  body { --song-zoom: .58; }
+  .playbar .ttl b { font-size: .9rem; }
+  .play-score b { font-size: 1.1rem; }
+  .playbar button.icon { width: 34px; height: 34px; }
+  .stage { gap: 4px 12px; }
+  .stage-info { font-size: .75rem; }
+  /* スタート・お手本・テンポを、右の列の1行に */
+  .stage > .controls.only-play { gap: 4px; flex-wrap: nowrap; }
+  .stage > .controls.only-play button.big { padding: 7px 12px; font-size: .9rem; }
+  .stage > .controls.only-play #demoBtn { padding: 7px 8px; font-size: .82rem; }
+  .stage .bpm { padding: 2px; gap: 2px; }
+  .stage .bpm button.ghost { width: 30px; height: 30px; }
+  .bpm input { width: 2.4em; padding: 4px 0; }
+  .bpm span { display: none; }
+}
 </style>
 <link rel="stylesheet" href="studio.css?v=5">
 </head>
