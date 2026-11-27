@@ -111,8 +111,8 @@ const renderPlan = () => {
     status = `${account.name} でログイン中です。有料版にすると、すべてのパターンと曲を最後まで練習できます（${PRICE_LABEL}）。`;
     btns = btn('buy', `有料版にする（${PRICE_LABEL}）`, 'gold') + (account.customer ? btn('portal', 'お支払いの履歴', 'ghost') : '') + btn('security', 'ログインと端末', 'ghost') + btn('logout', 'ログアウト', 'ghost');
   } else {
-    status = `有料版（${PRICE_LABEL}）にすると、すべてのパターンと曲を最後まで練習できます。前に申し込んだ方はログインしてください。`;
-    btns = btn('buy', `有料版にする（${PRICE_LABEL}）`, 'gold') + btn('login', 'ログイン', 'ghost');
+    status = `有料版（${PRICE_LABEL}）にすると、すべてのパターンと曲を最後まで練習できます。はじめての方は「無料で会員登録」（記録を同期できます）、前に登録した方は「ログイン」を押してください。`;
+    btns = btn('buy', `有料版にする（${PRICE_LABEL}）`, 'gold') + btn('register', '無料で会員登録') + btn('login', 'ログイン');
   }
   $('planStatus').textContent = status + (account.signedIn && !account.hasEmail ? '（「ログインと端末」でメールアドレスを登録しておくと、端末をなくしても自分でログインし直せます）' : '');
   $('planBtns').innerHTML = btns;
@@ -380,6 +380,7 @@ const offerPasskeyAfterLink = () => {
 const onPlanButton = async (what) => {
   try {
     if (what === 'buy') await buyPlan();
+    else if (what === 'register') { afterSignIn = null; openAcct('register', 'ドラムトレーナー用のパスキー（指紋・顔・PINでログインするしくみ）で、無料で会員登録できます。パスワードは要りません。'); }
     else if (what === 'login') { afterSignIn = null; openAcct('login'); }
     else if (what === 'pair') await showPairCode();
     else if (what === 'security') await openSecurity();
